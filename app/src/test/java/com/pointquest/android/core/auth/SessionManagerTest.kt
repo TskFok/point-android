@@ -162,18 +162,88 @@ class SessionManagerTest {
     }
 
     @Test
-    fun cancellationDuringInstallIsRethrown() = runBlocking {
+    fun cancellationDuringInstallClearsPublishedAndPersistedSessionsBeforeRethrow() = runBlocking {
         val cancellation = CancellationException("cancelled")
-        val manager = SessionManager(
-            FakeSessionStore(writeError = cancellation),
-            SessionState(),
+        val state = SessionState()
+        val store = FakeSessionStore(onClear = { assertNull(state.active.value) })
+        val manager = SessionManager(store, state)
+        manager.install(
+            sampleTokenBundle(accessToken = "old-access-token", refreshToken = "old-refresh-token"),
         )
+        store.writeBeforeError = true
+        store.writeError = cancellation
 
         try {
-            manager.install(sampleTokenBundle())
+            manager.install(
+                sampleTokenBundle(accessToken = "new-access-token", refreshToken = "new-refresh-token"),
+            )
             fail("CancellationException should be rethrown")
         } catch (actual: CancellationException) {
             assertSame(cancellation, actual)
+            assertNull(state.active.value)
+            assertTrue(store.clearCalled)
+            assertNull(store.lastWritten)
+        }
+    }
+
+    @Test
+    fun cancellationWhileWaitingToInstallClearsAnySessionPublishedAheadOfIt() = runBlocking {
+        val blockingWriteEntered = CompletableDeferred<Unit>()
+        val releaseBlockingWrite = CompletableDeferred<Unit>()
+        val state = SessionState()
+        val store = FakeSessionStore(
+            onWrite = { value ->
+                if (value.refreshToken == "blocking-refresh-token") {
+                    blockingWriteEntered.complete(Unit)
+                    releaseBlockingWrite.await()
+                }
+            },
+        )
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle(accessToken = "old-access-token"))
+        val blockingInstall = async {
+            manager.install(
+                sampleTokenBundle(
+                    accessToken = "blocking-access-token",
+                    refreshToken = "blocking-refresh-token",
+                ),
+            )
+        }
+        blockingWriteEntered.await()
+        val waitingInstall = async {
+            manager.install(sampleTokenBundle(accessToken = "waiting-access-token"))
+        }
+        yield()
+
+        waitingInstall.cancel(CancellationException("cancelled while waiting"))
+        releaseBlockingWrite.complete(Unit)
+        blockingInstall.await()
+        try {
+            waitingInstall.await()
+            fail("CancellationException should be rethrown")
+        } catch (_: CancellationException) {
+            assertNull(state.active.value)
+            assertTrue(store.clearCalled)
+            assertNull(store.lastWritten)
+        }
+    }
+
+    @Test
+    fun cancellationCleanupFailureNeverReplacesOriginalCancellation() = runBlocking {
+        val cancellation = CancellationException("original cancellation")
+        val state = SessionState()
+        val store = FakeSessionStore(clearError = IOException("cleanup failed"))
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle(accessToken = "old-access-token"))
+        store.writeError = cancellation
+
+        try {
+            manager.install(sampleTokenBundle(accessToken = "new-access-token"))
+            fail("CancellationException should be rethrown")
+        } catch (actual: CancellationException) {
+            assertSame(cancellation, actual)
+            assertNull(state.active.value)
+            assertTrue(store.clearCalled)
         }
     }
 
@@ -214,20 +284,24 @@ class SessionManagerTest {
         var writeError: Throwable? = null,
         private val clearError: Throwable? = null,
         private val onWrite: (suspend (StoredRefreshSession) -> Unit)? = null,
+        private val onClear: (suspend () -> Unit)? = null,
     ) : SessionStore {
         var clearCalled = false
         var lastWritten: StoredRefreshSession? = null
+        var writeBeforeError = false
 
         override suspend fun read(): StoredRefreshSession? = null
 
         override suspend fun write(value: StoredRefreshSession) {
             onWrite?.invoke(value)
+            if (writeBeforeError) lastWritten = value
             writeError?.let { throw it }
             lastWritten = value
         }
 
         override suspend fun clear() {
             clearCalled = true
+            onClear?.invoke()
             clearError?.let { throw it }
             lastWritten = null
         }

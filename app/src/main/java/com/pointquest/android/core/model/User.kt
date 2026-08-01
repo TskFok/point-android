@@ -21,4 +21,8 @@ data class TokenBundle(
     val refreshToken: String,
     val refreshTokenExpiresAt: Instant,
     val user: User,
-)
+) {
+    override fun toString(): String =
+        "TokenBundle(accessToken=[REDACTED], accessTokenExpiresAt=$accessTokenExpiresAt, " +
+            "refreshToken=[REDACTED], refreshTokenExpiresAt=$refreshTokenExpiresAt, user=$user)"
+}

@@ -6,6 +6,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import java.io.File
 import java.io.IOException
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -77,6 +81,36 @@ class SecureSessionStoreTest {
             fail("Tampered ciphertext must fail authentication")
         } catch (_: IOException) {
             // Authentication and parsing failures are all-or-nothing reads.
+        }
+    }
+
+    @Test
+    fun operationsUseConfiguredIoDispatcher() = runBlocking {
+        val dispatcher = RecordingDispatcher(Dispatchers.IO)
+        val dispatchedStore = SecureSessionStore(
+            context = ApplicationProvider.getApplicationContext(),
+            ioDispatcher = dispatcher,
+        )
+        val session = StoredRefreshSession(
+            refreshToken = "dispatcher-check",
+            expiresAt = Instant.parse("2030-01-01T00:00:00Z"),
+        )
+
+        dispatchedStore.write(session)
+        assertEquals(session, dispatchedStore.read())
+        dispatchedStore.clear()
+
+        assertTrue(dispatcher.dispatchCount.get() >= 3)
+    }
+
+    private class RecordingDispatcher(
+        private val delegate: CoroutineDispatcher,
+    ) : CoroutineDispatcher() {
+        val dispatchCount = AtomicInteger()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            dispatchCount.incrementAndGet()
+            delegate.dispatch(context, block)
         }
     }
 }

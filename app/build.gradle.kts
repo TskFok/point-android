@@ -64,6 +64,12 @@ val validateReleaseApiBaseUrl by tasks.registering {
         if (!uri.scheme.equals("https", ignoreCase = true) || uri.host.isNullOrBlank()) {
             throw GradleException("pointApiBaseUrl must be a valid HTTPS URL.")
         }
+        if (uri.path == "/api/v1" || uri.path.startsWith("/api/v1/")) {
+            throw GradleException("pointApiBaseUrl must not include the /api/v1 path.")
+        }
+        if (!rawApiBaseUrl.endsWith("/")) {
+            throw GradleException("pointApiBaseUrl must end with '/'.")
+        }
     }
 }
 
@@ -81,15 +87,16 @@ kotlin {
 
 val pointOpenApiSpec = providers.gradleProperty("pointOpenApiSpec")
     .orElse("${rootDir}/../point/openapi/openapi.json")
+val pointOpenApiSpecFile = layout.file(pointOpenApiSpec.map(::file))
 
 openApiValidate {
-    inputSpec.set(pointOpenApiSpec)
+    inputSpec.set(pointOpenApiSpecFile)
 }
 
 openApiGenerate {
     generatorName.set("kotlin")
-    inputSpec.set(pointOpenApiSpec)
-    outputDir.set(layout.buildDirectory.dir("generated/openapi").get().asFile.path)
+    inputSpec.set(pointOpenApiSpecFile)
+    outputDir.set(layout.buildDirectory.dir("generated/openapi"))
     apiPackage.set("com.pointquest.android.generated.api")
     modelPackage.set("com.pointquest.android.generated.model")
     packageName.set("com.pointquest.android.generated")
@@ -113,15 +120,16 @@ tasks.withType<KotlinCompile>().configureEach {
 
 tasks.named("openApiGenerate") {
     doLast {
-        fileTree(layout.buildDirectory.dir("generated/openapi/src/main/kotlin")) {
-            include("**/*.kt")
-        }.files.forEach { generatedFile ->
-            val imports = mutableSetOf<String>()
-            val normalizedSource = generatedFile.readLines().filter { line ->
-                !line.startsWith("import ") || imports.add(line)
-            }
-            generatedFile.writeText(normalizedSource.joinToString(separator = "\n", postfix = "\n"))
-        }
+        val apiClient = layout.buildDirectory
+            .file("generated/openapi/src/main/kotlin/com/pointquest/android/generated/infrastructure/ApiClient.kt")
+            .get()
+            .asFile
+        apiClient.writeText(
+            apiClient.readText().replace(
+                "import com.pointquest.android.generated.auth.ApiKeyAuth\n".repeat(2),
+                "import com.pointquest.android.generated.auth.ApiKeyAuth\n",
+            ),
+        )
     }
 }
 

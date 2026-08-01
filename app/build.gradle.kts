@@ -64,7 +64,8 @@ val validateReleaseApiBaseUrl by tasks.registering {
         if (!uri.scheme.equals("https", ignoreCase = true) || uri.host.isNullOrBlank()) {
             throw GradleException("pointApiBaseUrl must be a valid HTTPS URL.")
         }
-        if (uri.path == "/api/v1" || uri.path.startsWith("/api/v1/")) {
+        val pathSegments = uri.path.split('/').filter(String::isNotEmpty)
+        if (pathSegments.zipWithNext().any { (first, second) -> first == "api" && second == "v1" }) {
             throw GradleException("pointApiBaseUrl must not include the /api/v1 path.")
         }
         if (!rawApiBaseUrl.endsWith("/")) {
@@ -76,6 +77,37 @@ val validateReleaseApiBaseUrl by tasks.registering {
 tasks.configureEach {
     if (name == "preReleaseBuild") {
         dependsOn(validateReleaseApiBaseUrl)
+    }
+}
+
+val verifyNetworkSecurityConfig by tasks.registering {
+    dependsOn("packageDebugResources", "packageReleaseResources")
+    doLast {
+        fun cleartextTrafficPermission(resourceFile: File): String? {
+            val document = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder()
+                .parse(resourceFile)
+            return document.getElementsByTagName("base-config")
+                .item(0)
+                ?.attributes
+                ?.getNamedItem("cleartextTrafficPermitted")
+                ?.nodeValue
+        }
+
+        val debugConfig = layout.buildDirectory
+            .file("intermediates/packaged_res/debug/packageDebugResources/xml/network_security_config.xml")
+            .get()
+            .asFile
+        val releaseConfig = layout.buildDirectory
+            .file("intermediates/packaged_res/release/packageReleaseResources/xml/network_security_config.xml")
+            .get()
+            .asFile
+        check(cleartextTrafficPermission(debugConfig) == "true") {
+            "Debug network security config must permit cleartext traffic."
+        }
+        check(cleartextTrafficPermission(releaseConfig) == "false") {
+            "Release network security config must prohibit cleartext traffic."
+        }
     }
 }
 

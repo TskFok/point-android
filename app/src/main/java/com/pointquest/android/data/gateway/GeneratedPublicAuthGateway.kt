@@ -3,6 +3,7 @@ package com.pointquest.android.data.gateway
 import com.pointquest.android.core.model.TokenBundle
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.network.AppResult
+import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.toAppResult
 import com.pointquest.android.core.network.toDomain
 import com.pointquest.android.core.network.toNetworkError
@@ -44,5 +45,15 @@ class GeneratedPublicAuthGateway(
         throw cancellation
     } catch (failure: IOException) {
         AppResult.Failure(failure.toNetworkError())
+    } catch (failure: RuntimeException) {
+        AppResult.Failure(
+            AppError(
+                httpStatus = null,
+                code = "INVALID_RESPONSE",
+                message = "Server response is invalid",
+                requestId = null,
+                cause = failure,
+            ),
+        )
     }
 }

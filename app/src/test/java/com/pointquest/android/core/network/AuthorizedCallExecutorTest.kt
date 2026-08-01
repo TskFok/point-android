@@ -16,6 +16,7 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -69,6 +70,42 @@ class AuthorizedCallExecutorTest {
     }
 
     @Test
+    fun preRefreshRejectsNonStudentBeforeProtectedCallOrPersistence() = runBlocking {
+        val admin = User("admin-1", "admin", UserRole.ADMIN, 0)
+        val fixture = fixture(
+            accessExpiresAt = now.plusSeconds(30),
+            refreshBundle = tokenBundle("admin-access", "admin-refresh", user = admin),
+        )
+        var calls = 0
+
+        val result = fixture.executor.execute {
+            calls++
+            AppResult.Success("should-not-run")
+        }
+
+        assertEquals("FORBIDDEN", (result as AppResult.Failure).error.code)
+        assertEquals(0, calls)
+        assertEquals(1, fixture.gateway.refreshCalls)
+        assertNull(fixture.state.active.value)
+        assertNull(fixture.store.value)
+    }
+
+    @Test
+    fun preRefreshThenExpiredBusinessResponseDoesNotRefreshTwice() = runBlocking {
+        val fixture = fixture(accessExpiresAt = now.plusSeconds(30))
+        var calls = 0
+
+        val result = fixture.executor.execute<Unit> {
+            calls++
+            AppResult.Failure(expiredTokenError())
+        }
+
+        assertEquals("AUTH_TOKEN_EXPIRED", (result as AppResult.Failure).error.code)
+        assertEquals(1, calls)
+        assertEquals(1, fixture.gateway.refreshCalls)
+    }
+
+    @Test
     fun nonExpiredToken401IsNotRefreshedOrReplayed() = runBlocking {
         val fixture = fixture()
         var calls = 0
@@ -111,12 +148,14 @@ class AuthorizedCallExecutorTest {
         }
     }
 
-    private class FakePublicAuthGateway : PublicAuthGateway {
+    private class FakePublicAuthGateway(
+        private val refreshBundle: TokenBundle = tokenBundle("new-access", "new-refresh"),
+    ) : PublicAuthGateway {
         var refreshCalls = 0
 
         override suspend fun refresh(refreshToken: String): AppResult<TokenBundle> {
             refreshCalls++
-            return AppResult.Success(tokenBundle("new-access", "new-refresh"))
+            return AppResult.Success(refreshBundle)
         }
 
         override suspend fun register(username: String, password: String) = error("unused")
@@ -125,7 +164,7 @@ class AuthorizedCallExecutorTest {
     }
 
     private class FakeSessionStore : SessionStore {
-        private var value: StoredRefreshSession? = null
+        var value: StoredRefreshSession? = null
 
         override suspend fun read(): StoredRefreshSession? = value
         override suspend fun write(value: StoredRefreshSession) {
@@ -143,30 +182,34 @@ class AuthorizedCallExecutorTest {
         data class Fixture(
             val executor: AuthorizedCallExecutor,
             val gateway: FakePublicAuthGateway,
+            val state: SessionState,
+            val store: FakeSessionStore,
         )
 
         suspend fun fixture(
             accessExpiresAt: Instant = now.plusSeconds(300),
+            refreshBundle: TokenBundle = tokenBundle("new-access", "new-refresh"),
         ): Fixture {
             val store = FakeSessionStore()
             val state = SessionState()
             val manager = SessionManager(store, state)
             manager.install(tokenBundle("old-access", "old-refresh", accessExpiresAt))
-            val gateway = FakePublicAuthGateway()
+            val gateway = FakePublicAuthGateway(refreshBundle)
             val coordinator = RefreshCoordinator(gateway, manager, state, clock)
-            return Fixture(AuthorizedCallExecutor(state, coordinator, clock), gateway)
+            return Fixture(AuthorizedCallExecutor(state, coordinator, clock), gateway, state, store)
         }
 
         fun tokenBundle(
             accessToken: String,
             refreshToken: String,
             accessExpiresAt: Instant = now.plusSeconds(300),
+            user: User = User("student-1", "student", UserRole.STUDENT, 42),
         ) = TokenBundle(
             accessToken = accessToken,
             accessTokenExpiresAt = accessExpiresAt,
             refreshToken = refreshToken,
             refreshTokenExpiresAt = now.plusSeconds(3_600),
-            user = User("student-1", "student", UserRole.STUDENT, 42),
+            user = user,
         )
 
         fun expiredTokenError() = AppError(

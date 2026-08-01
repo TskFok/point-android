@@ -13,9 +13,11 @@ class AuthorizedCallExecutor(
 ) {
     suspend fun <T> execute(call: suspend () -> AppResult<T>): AppResult<T> {
         val observedBeforePreflight = sessionState.active.value?.generation ?: 0L
-        when (val preflight = refreshCoordinator.refresh(false, observedBeforePreflight)) {
+        val preflightRefreshed = when (
+            val preflight = refreshCoordinator.refreshWithOutcome(false, observedBeforePreflight)
+        ) {
             is AppResult.Failure -> return preflight
-            is AppResult.Success -> Unit
+            is AppResult.Success -> preflight.value.refreshed
         }
 
         val requestGeneration = sessionState.active.value?.generation ?: 0L
@@ -26,8 +28,9 @@ class AuthorizedCallExecutor(
         ) {
             return first
         }
+        if (preflightRefreshed) return first
 
-        return when (val refreshed = refreshCoordinator.refresh(true, requestGeneration)) {
+        return when (val refreshed = refreshCoordinator.refreshWithOutcome(true, requestGeneration)) {
             is AppResult.Failure -> refreshed
             is AppResult.Success -> invoke(call)
         }

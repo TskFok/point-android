@@ -86,6 +86,38 @@ class GeneratedPublicAuthGatewayTest {
     }
 
     @Test
+    fun validJsonMissingRequiredTokenFieldBecomesInvalidResponse() = runBlocking {
+        val missingAccessToken = """
+            {
+              "accessTokenExpiresIn":120,
+              "refreshToken":"refresh-token",
+              "refreshTokenExpiresAt":"2030-02-01T00:00:00Z",
+              "user":{"id":"student-1","pointsBalance":42,"role":"STUDENT","username":"student"}
+            }
+        """.trimIndent()
+        val gateway = gateway(TerminalInterceptor(body = missingAccessToken, code = 201))
+
+        val result = gateway.login("student", "pass1234")
+
+        val error = (result as AppResult.Failure).error
+        assertEquals("INVALID_RESPONSE", error.code)
+        assertTrue(error.cause is RuntimeException)
+    }
+
+    @Test
+    fun invalidRefreshExpiryTimeBecomesInvalidResponse() = runBlocking {
+        val invalidTime = tokenJson("access-token", "refresh-token")
+            .replace("2030-02-01T00:00:00Z", "not-a-time")
+        val gateway = gateway(TerminalInterceptor(body = invalidTime, code = 201))
+
+        val result = gateway.refresh("old-refresh")
+
+        val error = (result as AppResult.Failure).error
+        assertEquals("INVALID_RESPONSE", error.code)
+        assertTrue(error.cause is RuntimeException)
+    }
+
+    @Test
     fun ioFailureBecomesNetworkErrorAndCancellationIsRethrown() = runBlocking {
         val io = IOException("offline")
         val ioResult = gateway(TerminalInterceptor(failure = io)).login("student", "pass1234")

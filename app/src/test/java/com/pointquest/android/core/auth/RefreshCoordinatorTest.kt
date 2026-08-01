@@ -4,13 +4,16 @@ import com.pointquest.android.core.model.TokenBundle
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppResult
+import com.pointquest.android.data.auth.DefaultAuthRepository
 import com.pointquest.android.data.gateway.PublicAuthGateway
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -23,20 +26,36 @@ import org.junit.Test
 class RefreshCoordinatorTest {
     @Test
     fun concurrentRefreshesUseOneNetworkCall() = runBlocking {
+        val readyCount = java.util.concurrent.atomic.AtomicInteger()
+        val allReady = CompletableDeferred<Unit>()
+        val start = CompletableDeferred<Unit>()
+        val refreshEntered = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
         val store = FakeSessionStore()
         val state = SessionState()
         val manager = SessionManager(store, state)
         manager.install(tokenBundle(accessToken = "old-access", refreshToken = "old-refresh"))
-        val gateway = FakePublicAuthGateway(refreshDelayMs = 50)
+        val gateway = FakePublicAuthGateway(
+            refreshEntered = refreshEntered,
+            releaseRefresh = releaseRefresh,
+        )
         val coordinator = RefreshCoordinator(gateway, manager, state, clock)
 
         coroutineScope {
-            repeat(20) {
+            val jobs = List(20) {
                 launch {
+                    if (readyCount.incrementAndGet() == 20) allReady.complete(Unit)
+                    start.await()
                     val result = coordinator.refresh(force = true, observedGeneration = 1L)
                     assertTrue(result is AppResult.Success)
                 }
             }
+            allReady.await()
+            start.complete(Unit)
+            refreshEntered.await()
+            assertEquals(1, gateway.refreshCalls)
+            releaseRefresh.complete(Unit)
+            jobs.joinAll()
         }
 
         assertEquals(1, gateway.refreshCalls)
@@ -60,6 +79,66 @@ class RefreshCoordinatorTest {
         assertEquals("access-2", (result as AppResult.Success).value.accessToken)
         assertEquals(0, gateway.refreshCalls)
         assertEquals("refresh-2", store.value?.refreshToken)
+    }
+
+    @Test
+    fun refreshResponseAfterLogoutCannotResurrectSession() = runBlocking {
+        val refreshEntered = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+        val store = FakeSessionStore()
+        val state = SessionState()
+        val manager = SessionManager(store, state)
+        manager.install(tokenBundle("old-access", "old-refresh"))
+        val gateway = FakePublicAuthGateway(
+            refreshEntered = refreshEntered,
+            releaseRefresh = releaseRefresh,
+        )
+        val coordinator = RefreshCoordinator(gateway, manager, state, clock)
+        val repository = DefaultAuthRepository(gateway, manager, state, coordinator)
+
+        val refreshing = async {
+            coordinator.refresh(force = true, observedGeneration = 1L)
+        }
+        refreshEntered.await()
+        repository.logout()
+        releaseRefresh.complete(Unit)
+
+        val result = refreshing.await()
+        assertEquals("AUTH_SESSION_CHANGED", (result as AppResult.Failure).error.code)
+        assertNull(state.active.value)
+        assertNull(store.value)
+    }
+
+    @Test
+    fun refreshResponseFromOldAccountCannotOverwriteConcurrentLogin() = runBlocking {
+        val refreshEntered = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+        val store = FakeSessionStore()
+        val state = SessionState()
+        val manager = SessionManager(store, state)
+        manager.install(tokenBundle("old-access", "old-refresh"))
+        val newUser = User("student-2", "new-student", UserRole.STUDENT, 7)
+        val newBundle = tokenBundle("new-access", "new-refresh", user = newUser)
+        val gateway = FakePublicAuthGateway(
+            refreshEntered = refreshEntered,
+            releaseRefresh = releaseRefresh,
+            loginResult = AppResult.Success(newBundle),
+        )
+        val coordinator = RefreshCoordinator(gateway, manager, state, clock)
+        val repository = DefaultAuthRepository(gateway, manager, state, coordinator)
+
+        val refreshing = async {
+            coordinator.refresh(force = true, observedGeneration = 1L)
+        }
+        refreshEntered.await()
+        val login = repository.login("new-student", "pass1234")
+        releaseRefresh.complete(Unit)
+
+        assertEquals(newUser, (login as AppResult.Success).value)
+        assertEquals("AUTH_SESSION_CHANGED", (refreshing.await() as AppResult.Failure).error.code)
+        assertEquals("new-access", state.active.value?.accessToken)
+        assertEquals(newUser, state.active.value?.user)
+        assertEquals("new-refresh", store.value?.refreshToken)
     }
 
     @Test
@@ -143,6 +222,26 @@ class RefreshCoordinatorTest {
     }
 
     @Test
+    fun semanticMappingFailureClearsSessionAndNeverReusesOldToken() = runBlocking {
+        val mappingFailure = com.squareup.moshi.JsonDataException("missing accessToken")
+        val store = FakeSessionStore()
+        val state = SessionState()
+        val manager = SessionManager(store, state)
+        manager.install(tokenBundle("old-access", "old-refresh"))
+        val gateway = FakePublicAuthGateway(refreshFailure = mappingFailure)
+        val coordinator = RefreshCoordinator(gateway, manager, state, clock)
+
+        val first = coordinator.refresh(force = true, observedGeneration = 1L)
+        val second = coordinator.refresh(force = true, observedGeneration = 1L)
+
+        assertEquals("INVALID_RESPONSE", (first as AppResult.Failure).error.code)
+        assertEquals("AUTH_SESSION_MISSING", (second as AppResult.Failure).error.code)
+        assertEquals(listOf("old-refresh"), gateway.refreshTokens)
+        assertNull(state.active.value)
+        assertNull(store.value)
+    }
+
+    @Test
     fun secureWriteFailureAfterRotationLeavesNoSession() = runBlocking {
         val store = FakeSessionStore()
         val state = SessionState()
@@ -181,9 +280,11 @@ class RefreshCoordinatorTest {
     }
 
     private class FakePublicAuthGateway(
-        private val refreshDelayMs: Long = 0,
         private val refreshResult: AppResult<TokenBundle>? = null,
         private val refreshFailure: Throwable? = null,
+        private val refreshEntered: CompletableDeferred<Unit>? = null,
+        private val releaseRefresh: CompletableDeferred<Unit>? = null,
+        private val loginResult: AppResult<TokenBundle>? = null,
     ) : PublicAuthGateway {
         var refreshCalls = 0
         val refreshTokens = mutableListOf<String>()
@@ -191,7 +292,8 @@ class RefreshCoordinatorTest {
         override suspend fun refresh(refreshToken: String): AppResult<TokenBundle> {
             refreshCalls++
             refreshTokens += refreshToken
-            delay(refreshDelayMs)
+            refreshEntered?.complete(Unit)
+            releaseRefresh?.await()
             refreshFailure?.let { throw it }
             refreshResult?.let { return it }
             return AppResult.Success(
@@ -200,8 +302,9 @@ class RefreshCoordinatorTest {
         }
 
         override suspend fun register(username: String, password: String) = error("unused")
-        override suspend fun login(username: String, password: String) = error("unused")
-        override suspend fun logout(refreshToken: String) = error("unused")
+        override suspend fun login(username: String, password: String): AppResult<TokenBundle> =
+            loginResult ?: error("unused")
+        override suspend fun logout(refreshToken: String) = AppResult.Success(Unit)
     }
 
     private class FakeSessionStore : SessionStore {
@@ -226,12 +329,13 @@ class RefreshCoordinatorTest {
             accessToken: String,
             refreshToken: String,
             refreshExpiresAt: Instant = now.plusSeconds(3_600),
+            user: User = User("student-1", "student", UserRole.STUDENT, 42),
         ) = TokenBundle(
             accessToken = accessToken,
             accessTokenExpiresAt = now.plusSeconds(300),
             refreshToken = refreshToken,
             refreshTokenExpiresAt = refreshExpiresAt,
-            user = User("student-1", "student", UserRole.STUDENT, 42),
+            user = user,
         )
     }
 }

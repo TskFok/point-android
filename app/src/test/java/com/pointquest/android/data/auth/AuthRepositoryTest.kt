@@ -114,6 +114,19 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun restoreRejectsNonStudentBeforePublishingOrPersistingIt() = runBlocking {
+        val fixture = fixture(refreshResult = AppResult.Success(studentBundle(user = admin)))
+        fixture.store.value = StoredRefreshSession("stored-refresh", now.plusSeconds(3_600))
+
+        val result = fixture.repository.restore()
+
+        assertEquals("FORBIDDEN", (result as AppResult.Failure).error.code)
+        assertNull(fixture.state.active.value)
+        assertNull(fixture.store.value)
+        assertTrue(fixture.store.writtenRefreshTokens.isEmpty())
+    }
+
+    @Test
     fun logoutServerFailureStillClearsLocalSession() = runBlocking {
         val serverFailure = AppResult.Failure(
             AppError(null, "NETWORK_ERROR", "offline", null),
@@ -207,9 +220,11 @@ class AuthRepositoryTest {
     private class MemoryStore : SessionStore {
         var value: StoredRefreshSession? = null
         var writeFailure: Throwable? = null
+        val writtenRefreshTokens = mutableListOf<String>()
         override suspend fun read() = value
         override suspend fun write(value: StoredRefreshSession) {
             writeFailure?.let { throw it }
+            writtenRefreshTokens += value.refreshToken
             this.value = value
         }
         override suspend fun clear() {

@@ -21,7 +21,7 @@ import org.junit.Test
 
 class SessionManagerTest {
     @Test
-    fun storedRefreshSessionIsReadThroughManager() = runBlocking {
+    fun refreshLeaseAtomicallyCapturesStoredSessionAndEpoch() = runBlocking {
         val expected = StoredRefreshSession(
             refreshToken = "refresh-token",
             expiresAt = Instant.parse("2030-02-01T00:00:00Z"),
@@ -29,9 +29,66 @@ class SessionManagerTest {
         val store = FakeSessionStore().apply { lastWritten = expected }
         val manager = SessionManager(store, SessionState())
 
-        val result = manager.readStoredRefreshSession()
+        val result = manager.acquireRefreshLease()
 
-        assertEquals(expected, (result as AppResult.Success).value)
+        val lease = (result as AppResult.Success).value
+        assertEquals(expected, lease?.storedSession)
+        assertEquals(0L, lease?.epoch)
+    }
+
+    @Test
+    fun clearAdvancesEpochEvenWhenSessionIsAlreadyEmpty() = runBlocking {
+        val manager = SessionManager(FakeSessionStore(), SessionState())
+
+        manager.clear()
+        manager.clear()
+        val installed = manager.install(sampleTokenBundle())
+
+        assertEquals(3L, (installed as AppResult.Success).value.generation)
+    }
+
+    @Test
+    fun cancellationWhileReadingRefreshLeaseClearsSessionAndRethrowsOriginal() = runBlocking {
+        val cancellation = CancellationException("read cancelled")
+        val state = SessionState()
+        val store = FakeSessionStore()
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle())
+        store.readError = cancellation
+
+        try {
+            manager.acquireRefreshLease()
+            fail("CancellationException should be rethrown")
+        } catch (actual: CancellationException) {
+            assertSame(cancellation, actual)
+            assertNull(state.active.value)
+            assertNull(store.lastWritten)
+        }
+    }
+
+    @Test
+    fun readFailureKeepsOriginalErrorWhenCleanupIsCancelled() = runBlocking {
+        val readFailure = IOException("read failed")
+        val cleanupCancellation = CancellationException("cleanup cancelled")
+        val state = SessionState()
+        val store = FakeSessionStore()
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle())
+        store.readError = readFailure
+        store.clearError = cleanupCancellation
+
+        val result = manager.acquireRefreshLease()
+
+        val error = (result as AppResult.Failure).error
+        assertEquals("SESSION_STORE_READ_FAILED", error.code)
+        assertSame(readFailure, error.cause)
+        assertNull(state.active.value)
+        assertTrue(store.clearCalled)
+
+        store.readError = null
+        store.clearError = null
+        val nextLease = manager.acquireRefreshLease()
+        assertNull((nextLease as AppResult.Success).value)
     }
 
     @Test
@@ -128,7 +185,7 @@ class SessionManagerTest {
 
         store.writeError = null
         val recovered = manager.install(sampleTokenBundle(accessToken = "recovered-access"))
-        assertEquals(2L, (recovered as AppResult.Success).value.generation)
+        assertEquals(3L, (recovered as AppResult.Success).value.generation)
     }
 
     @Test
@@ -296,15 +353,19 @@ class SessionManagerTest {
 
     private class FakeSessionStore(
         var writeError: Throwable? = null,
-        private val clearError: Throwable? = null,
+        var clearError: Throwable? = null,
         private val onWrite: (suspend (StoredRefreshSession) -> Unit)? = null,
         private val onClear: (suspend () -> Unit)? = null,
     ) : SessionStore {
         var clearCalled = false
         var lastWritten: StoredRefreshSession? = null
         var writeBeforeError = false
+        var readError: Throwable? = null
 
-        override suspend fun read(): StoredRefreshSession? = lastWritten
+        override suspend fun read(): StoredRefreshSession? {
+            readError?.let { throw it }
+            return lastWritten
+        }
 
         override suspend fun write(value: StoredRefreshSession) {
             onWrite?.invoke(value)

@@ -55,12 +55,18 @@ class RefreshCoordinator(
                 return@withLock AppResult.Success(RefreshOutcome(lockedCurrent, refreshed = false))
             }
 
-            val lease = when (val leaseResult = sessionManager.acquireRefreshLease()) {
-                is AppResult.Success -> leaseResult.value
-                is AppResult.Failure -> return@withLock leaseResult
-            } ?: run {
-                sessionManager.clear()
-                return@withLock AppResult.Failure(noSessionError())
+            val lease = when (val snapshotResult = sessionManager.acquireRefreshLease()) {
+                is AppResult.Failure -> return@withLock snapshotResult
+                is AppResult.Success -> when (val snapshot = snapshotResult.value) {
+                    is RefreshMaterialSnapshot.Available -> snapshot
+                    is RefreshMaterialSnapshot.Missing -> {
+                        return@withLock if (sessionManager.clearIfEpochMatches(snapshot.epoch)) {
+                            AppResult.Failure(noSessionError())
+                        } else {
+                            AppResult.Failure(sessionChangedError())
+                        }
+                    }
+                }
             }
             val stored = lease.storedSession
 

@@ -8,6 +8,7 @@ import java.io.IOException
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
@@ -31,9 +32,10 @@ class SessionManagerTest {
 
         val result = manager.acquireRefreshLease()
 
-        val lease = (result as AppResult.Success).value
-        assertEquals(expected, lease?.storedSession)
-        assertEquals(0L, lease?.epoch)
+        val snapshot = (result as AppResult.Success).value
+        val available = snapshot as RefreshMaterialSnapshot.Available
+        assertEquals(expected, available.storedSession)
+        assertEquals(0L, available.epoch)
     }
 
     @Test
@@ -87,8 +89,95 @@ class SessionManagerTest {
 
         store.readError = null
         store.clearError = null
-        val nextLease = manager.acquireRefreshLease()
-        assertNull((nextLease as AppResult.Success).value)
+        val nextSnapshot = manager.acquireRefreshLease()
+        assertTrue((nextSnapshot as AppResult.Success).value is RefreshMaterialSnapshot.Missing)
+    }
+
+    @Test
+    fun missingSnapshotCannotClearLoginThatAdvancedEpoch() = runBlocking {
+        val snapshotTaken = CompletableDeferred<Unit>()
+        val continueClear = CompletableDeferred<Unit>()
+        val state = SessionState()
+        val store = FakeSessionStore()
+        val manager = SessionManager(store, state)
+
+        val oldMissingClear = async {
+            val snapshot = (manager.acquireRefreshLease() as AppResult.Success).value
+            val missing = snapshot as RefreshMaterialSnapshot.Missing
+            snapshotTaken.complete(Unit)
+            continueClear.await()
+            manager.clearIfEpochMatches(missing.epoch)
+        }
+        snapshotTaken.await()
+        val newUser = User("student-2", "new-student", UserRole.STUDENT, 7)
+        manager.install(
+            sampleTokenBundle(
+                accessToken = "new-access",
+                refreshToken = "new-refresh",
+                user = newUser,
+            ),
+        )
+        continueClear.complete(Unit)
+
+        assertFalse(oldMissingClear.await())
+        assertEquals(newUser, state.active.value?.user)
+        assertEquals("new-access", state.active.value?.accessToken)
+        assertEquals("new-refresh", store.lastWritten?.refreshToken)
+    }
+
+    @Test
+    fun cancellingStaleCommitWaitingForLoginMutexDoesNotClearNewLogin() = runBlocking {
+        val newWriteEntered = CompletableDeferred<Unit>()
+        val releaseNewWrite = CompletableDeferred<Unit>()
+        val state = SessionState()
+        val store = FakeSessionStore(
+            onWrite = { stored ->
+                if (stored.refreshToken == "new-refresh") {
+                    newWriteEntered.complete(Unit)
+                    releaseNewWrite.await()
+                }
+            },
+        )
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle(accessToken = "old-access", refreshToken = "old-refresh"))
+        val snapshot = (manager.acquireRefreshLease() as AppResult.Success).value
+        val oldLease = snapshot as RefreshMaterialSnapshot.Available
+        val newUser = User("student-2", "new-student", UserRole.STUDENT, 7)
+        val newLogin = async {
+            manager.install(
+                sampleTokenBundle(
+                    accessToken = "new-access",
+                    refreshToken = "new-refresh",
+                    user = newUser,
+                ),
+            )
+        }
+        newWriteEntered.await()
+
+        val oldCommit = async(start = CoroutineStart.UNDISPATCHED) {
+            manager.commitRefresh(
+                oldLease,
+                sampleTokenBundle(
+                    accessToken = "old-rotated-access",
+                    refreshToken = "old-rotated-refresh",
+                ),
+            )
+        }
+        val cancellation = CancellationException("cancel stale commit waiting for mutex")
+        oldCommit.cancel(cancellation)
+        releaseNewWrite.complete(Unit)
+        val installed = newLogin.await()
+
+        try {
+            oldCommit.await()
+            fail("CancellationException should be rethrown")
+        } catch (actual: CancellationException) {
+            assertEquals(cancellation.message, actual.message)
+        }
+        assertEquals(newUser, (installed as AppResult.Success).value.user)
+        assertEquals(newUser, state.active.value?.user)
+        assertEquals("new-access", state.active.value?.accessToken)
+        assertEquals("new-refresh", store.lastWritten?.refreshToken)
     }
 
     @Test
@@ -258,7 +347,7 @@ class SessionManagerTest {
     }
 
     @Test
-    fun cancellationWhileWaitingToInstallClearsAnySessionPublishedAheadOfIt() = runBlocking {
+    fun cancellationWhileWaitingToInstallDoesNotClearSessionPublishedAheadOfIt() = runBlocking {
         val blockingWriteEntered = CompletableDeferred<Unit>()
         val releaseBlockingWrite = CompletableDeferred<Unit>()
         val state = SessionState()
@@ -293,9 +382,9 @@ class SessionManagerTest {
             waitingInstall.await()
             fail("CancellationException should be rethrown")
         } catch (_: CancellationException) {
-            assertNull(state.active.value)
-            assertTrue(store.clearCalled)
-            assertNull(store.lastWritten)
+            assertEquals("blocking-access-token", state.active.value?.accessToken)
+            assertFalse(store.clearCalled)
+            assertEquals("blocking-refresh-token", store.lastWritten?.refreshToken)
         }
     }
 
@@ -338,17 +427,18 @@ class SessionManagerTest {
     private fun sampleTokenBundle(
         accessToken: String = "access-token",
         refreshToken: String = "refresh-token",
-    ) = TokenBundle(
-        accessToken = accessToken,
-        accessTokenExpiresAt = Instant.parse("2030-01-01T01:00:00Z"),
-        refreshToken = refreshToken,
-        refreshTokenExpiresAt = Instant.parse("2030-02-01T00:00:00Z"),
-        user = User(
+        user: User = User(
             id = "student-1",
             username = "student",
             role = UserRole.STUDENT,
             pointsBalance = 42,
         ),
+    ) = TokenBundle(
+        accessToken = accessToken,
+        accessTokenExpiresAt = Instant.parse("2030-01-01T01:00:00Z"),
+        refreshToken = refreshToken,
+        refreshTokenExpiresAt = Instant.parse("2030-02-01T00:00:00Z"),
+        user = user,
     )
 
     private class FakeSessionStore(

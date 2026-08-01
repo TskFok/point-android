@@ -9,10 +9,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-internal data class RefreshLease(
-    val epoch: Long,
-    val storedSession: StoredRefreshSession,
-)
+internal sealed interface RefreshMaterialSnapshot {
+    val epoch: Long
+
+    data class Available(
+        override val epoch: Long,
+        val storedSession: StoredRefreshSession,
+    ) : RefreshMaterialSnapshot
+
+    data class Missing(
+        override val epoch: Long,
+    ) : RefreshMaterialSnapshot
+}
 
 internal sealed interface RefreshCommit {
     data class Installed(val session: ActiveSession) : RefreshCommit
@@ -25,15 +33,19 @@ class SessionManager(
 ) {
     private val mutex = Mutex()
     private var epoch = state.active.value?.generation ?: 0L
-    @Volatile
     private var refreshMaterialValid = true
 
-    internal suspend fun acquireRefreshLease(): AppResult<RefreshLease?> = mutex.withLock {
-        if (!refreshMaterialValid) return@withLock AppResult.Success(null)
+    internal suspend fun acquireRefreshLease(): AppResult<RefreshMaterialSnapshot> = mutex.withLock {
+        if (!refreshMaterialValid) {
+            return@withLock AppResult.Success(RefreshMaterialSnapshot.Missing(epoch))
+        }
         try {
+            val stored = store.read()
             AppResult.Success(
-                store.read()?.let { stored ->
-                    RefreshLease(epoch = epoch, storedSession = stored)
+                if (stored == null) {
+                    RefreshMaterialSnapshot.Missing(epoch)
+                } else {
+                    RefreshMaterialSnapshot.Available(epoch, stored)
                 },
             )
         } catch (cancellation: CancellationException) {
@@ -46,38 +58,35 @@ class SessionManager(
     }
 
     internal suspend fun readStoredRefreshSession(): AppResult<StoredRefreshSession?> =
-        when (val lease = acquireRefreshLease()) {
-            is AppResult.Failure -> lease
-            is AppResult.Success -> AppResult.Success(lease.value?.storedSession)
+        when (val snapshot = acquireRefreshLease()) {
+            is AppResult.Failure -> snapshot
+            is AppResult.Success -> AppResult.Success(
+                (snapshot.value as? RefreshMaterialSnapshot.Available)?.storedSession,
+            )
         }
 
-    suspend fun install(bundle: TokenBundle): AppResult<ActiveSession> = try {
+    suspend fun install(bundle: TokenBundle): AppResult<ActiveSession> =
         mutex.withLock { installLocked(bundle) }
-    } catch (cancellation: CancellationException) {
-        cleanupAfterCancellation()
-        throw cancellation
-    }
 
     internal suspend fun commitRefresh(
-        lease: RefreshLease,
+        lease: RefreshMaterialSnapshot.Available,
         bundle: TokenBundle,
-    ): AppResult<RefreshCommit> = try {
-        mutex.withLock {
-            if (epoch != lease.epoch) {
-                return@withLock AppResult.Success(RefreshCommit.Stale(state.active.value))
-            }
-            when (val installed = installLocked(bundle)) {
-                is AppResult.Failure -> installed
-                is AppResult.Success -> AppResult.Success(RefreshCommit.Installed(installed.value))
-            }
+    ): AppResult<RefreshCommit> = mutex.withLock {
+        if (epoch != lease.epoch) {
+            return@withLock AppResult.Success(RefreshCommit.Stale(state.active.value))
         }
-    } catch (cancellation: CancellationException) {
-        cleanupAfterCancellation()
-        throw cancellation
+        when (val installed = installLocked(bundle)) {
+            is AppResult.Failure -> installed
+            is AppResult.Success -> AppResult.Success(RefreshCommit.Installed(installed.value))
+        }
     }
 
-    internal suspend fun invalidateRefreshLease(lease: RefreshLease): Boolean = mutex.withLock {
-        if (epoch != lease.epoch) return@withLock false
+    internal suspend fun invalidateRefreshLease(
+        lease: RefreshMaterialSnapshot.Available,
+    ): Boolean = clearIfEpochMatches(lease.epoch)
+
+    internal suspend fun clearIfEpochMatches(sampledEpoch: Long): Boolean = mutex.withLock {
+        if (epoch != sampledEpoch) return@withLock false
         cleanupLockedPreservingFailure()
         true
     }
@@ -103,6 +112,7 @@ class SessionManager(
         try {
             store.write(storedSession)
         } catch (cancellation: CancellationException) {
+            cleanupLockedPreservingFailure()
             throw cancellation
         } catch (failure: Exception) {
             cleanupLockedPreservingFailure()
@@ -119,14 +129,6 @@ class SessionManager(
         )
         state.publish(activeSession)
         return AppResult.Success(activeSession)
-    }
-
-    private suspend fun cleanupAfterCancellation() {
-        refreshMaterialValid = false
-        state.clear()
-        withContext(NonCancellable) {
-            mutex.withLock { cleanupLockedPreservingFailure() }
-        }
     }
 
     private suspend fun cleanupLockedPreservingFailure() {

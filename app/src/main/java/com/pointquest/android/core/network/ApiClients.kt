@@ -14,8 +14,10 @@ class ApiClients(
     baseUrl: String,
     sessionState: SessionState,
 ) {
-    val publicApi: DefaultApi = defaultApi(baseUrl, publicBuilder())
-    val protectedApi: DefaultApi = defaultApi(baseUrl, protectedBuilder(sessionState))
+    val publicHttpClient: OkHttpClient = publicBuilder().build()
+    val protectedHttpClient: OkHttpClient = protectedBuilder(sessionState).build()
+    val publicApi: DefaultApi = defaultApi(baseUrl, publicHttpClient)
+    val protectedApi: DefaultApi = defaultApi(baseUrl, protectedHttpClient)
 
     companion object {
         fun publicBuilder(): OkHttpClient.Builder = secureBaseBuilder()
@@ -24,10 +26,13 @@ class ApiClients(
         fun protectedBuilder(sessionState: SessionState): OkHttpClient.Builder = secureBaseBuilder()
             .addInterceptor(BearerInterceptor(sessionState))
 
-        fun defaultApi(baseUrl: String, builder: OkHttpClient.Builder): DefaultApi = ApiClient(
+        fun defaultApi(baseUrl: String, builder: OkHttpClient.Builder): DefaultApi =
+            defaultApi(baseUrl, builder.build())
+
+        fun defaultApi(baseUrl: String, client: OkHttpClient): DefaultApi = ApiClient(
             baseUrl = baseUrl,
-            okHttpClientBuilder = builder,
             serializerBuilder = Serializer.moshiBuilder,
+            callFactory = client,
         ).createService(DefaultApi::class.java)
 
         private fun secureBaseBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()

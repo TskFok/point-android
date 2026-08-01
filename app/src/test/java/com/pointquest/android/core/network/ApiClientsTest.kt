@@ -20,11 +20,24 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ApiClientsTest {
+    @Test
+    fun constructedClientsKeepPublicAndProtectedInstancesSeparated() {
+        val clients = ApiClients("https://example.test/", SessionState())
+
+        assertNotSame(clients.publicHttpClient, clients.protectedHttpClient)
+        assertEquals(1, clients.publicHttpClient.interceptors.size)
+        assertEquals(1, clients.protectedHttpClient.interceptors.size)
+        assertFalse(clients.publicHttpClient.interceptors.single() is BearerInterceptor)
+        assertTrue(clients.protectedHttpClient.interceptors.single() is BearerInterceptor)
+    }
+
     @Test
     fun bothBuildersUseExactTimeoutsNoCookiesAndNoLogging() {
         val state = SessionState()

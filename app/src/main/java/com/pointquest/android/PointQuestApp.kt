@@ -1,13 +1,17 @@
 package com.pointquest.android
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import com.pointquest.android.app.AppContainer
+import com.pointquest.android.app.AppNavHost
 import com.pointquest.android.core.ui.theme.PointQuestTheme
 
 @Composable
-fun PointQuestApp() {
+fun PointQuestApp(container: AppContainer) {
+    val sessionStatus by container.sessionState.status.collectAsStateWithLifecycle()
+
     PointQuestTheme {
-        Text(stringResource(R.string.app_name))
+        AppNavHost(sessionStatus)
     }
 }

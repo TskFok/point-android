@@ -42,6 +42,7 @@ import com.pointquest.android.core.ui.ViewModelFactory
 import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointScaffold
 import com.pointquest.android.feature.auth.AuthEvent
+import com.pointquest.android.feature.auth.AuthUiState
 import com.pointquest.android.feature.auth.AuthViewModel
 import com.pointquest.android.feature.auth.LoginScreen
 import com.pointquest.android.feature.auth.RegisterScreen
@@ -100,7 +101,13 @@ fun AppNavHost(
         composable<AppRoute.Splash> { SplashScreen() }
         composable<AppRoute.Login> { entry ->
             if (container == null) {
-                PlaceholderScreen(navController, AppRoute.Login, R.string.login_title, R.string.login_placeholder)
+                LoginScreen(
+                    state = AuthUiState(),
+                    onUsernameChange = {},
+                    onPasswordChange = {},
+                    onLogin = {},
+                    onRegister = { navController.navigate(AppRoute.Register) },
+                )
             } else {
                 val factory = remember(container.authRepository) {
                     ViewModelFactory<AuthViewModel> { AuthViewModel(container.authRepository) }
@@ -127,7 +134,16 @@ fun AppNavHost(
         }
         composable<AppRoute.Register> {
             if (container == null) {
-                PlaceholderScreen(navController, AppRoute.Register, R.string.register_title, R.string.register_placeholder)
+                RegisterScreen(
+                    state = AuthUiState(),
+                    onUsernameChange = {},
+                    onPasswordChange = {},
+                    onConfirmPasswordChange = {},
+                    onRegister = {},
+                    onBackToLogin = {
+                        if (!navController.popBackStack()) navController.navigate(AppRoute.Login)
+                    },
+                )
             } else {
                 val factory = remember(container.authRepository) {
                     ViewModelFactory<AuthViewModel> { AuthViewModel(container.authRepository) }

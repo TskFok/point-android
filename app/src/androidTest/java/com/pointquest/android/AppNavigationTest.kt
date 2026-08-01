@@ -1,16 +1,10 @@
 package com.pointquest.android
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.pointquest.android.app.AppRoute
 import com.pointquest.android.core.auth.SessionStatus
 import org.junit.Rule
 import org.junit.Test
@@ -23,18 +17,16 @@ class AppNavigationTest {
 
     @Test
     fun signedOutRegisterLoginAndBottomNavigationFlow() {
-        var status by mutableStateOf<SessionStatus>(SessionStatus.SignedOut)
-        lateinit var navController: NavHostController
+        val session = FakeAppSession(SessionStatus.SignedOut)
         composeRule.setContent {
-            navController = rememberNavController()
-            AppNavigationTestShell(status, navController)
+            AppNavigationTestShell(session)
         }
 
-        composeRule.onNodeWithText("登录功能即将接入").assertIsDisplayed()
-        composeRule.runOnUiThread { navController.navigate(AppRoute.Register) }
-        composeRule.onNodeWithText("注册功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithText("欢迎回来").assertIsDisplayed()
+        composeRule.onNodeWithText("还没有账号？注册账号").performClick()
+        composeRule.onNodeWithText("创建学生账号").assertIsDisplayed()
 
-        composeRule.runOnUiThread { status = SessionStatus.SignedIn(testStudent()) }
+        composeRule.runOnUiThread { session.signIn(testStudent()) }
         composeRule.onNodeWithText("首页功能即将接入").assertIsDisplayed()
 
         composeRule.onNodeWithText("练习").performClick()

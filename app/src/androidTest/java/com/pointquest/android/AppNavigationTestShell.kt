@@ -1,6 +1,9 @@
 package com.pointquest.android
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.pointquest.android.app.AppNavHost
@@ -11,15 +14,28 @@ import com.pointquest.android.core.ui.theme.PointQuestTheme
 
 @Composable
 internal fun AppNavigationTestShell(
-    sessionStatus: SessionStatus,
+    session: FakeAppSession,
     navController: NavHostController = rememberNavController(),
 ) {
     PointQuestTheme {
         AppNavHost(
-            sessionStatus = sessionStatus,
+            sessionStatus = session.status,
             navController = navController,
             container = null,
         )
+    }
+}
+
+internal class FakeAppSession(initialStatus: SessionStatus) {
+    var status by mutableStateOf(initialStatus)
+        private set
+
+    fun signIn(user: User) {
+        status = SessionStatus.SignedIn(user)
+    }
+
+    fun expire() {
+        status = SessionStatus.SignedOut
     }
 }
 

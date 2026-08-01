@@ -35,10 +35,8 @@
     <string name="auth_error_confirm_password_rejected">确认密码未通过校验</string>
     <string name="auth_error_username_exists">该用户名已被使用</string>
     <string name="auth_password_helper">密码至少 10 位，并同时包含字母和数字</string>
-    <string name="login_placeholder">登录功能即将接入</string>
     <string name="register_title">注册</string>
     <string name="register_welcome">创建学生账号</string>
-    <string name="register_placeholder">注册功能即将接入</string>
     <string name="home_title">首页</string>
     <string name="home_error_load">学习概览和积分加载失败，请重试</string>
     <string name="home_error_summary">学习概览加载失败，请重试</string>

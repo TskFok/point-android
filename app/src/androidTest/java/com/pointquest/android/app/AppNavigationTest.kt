@@ -35,7 +35,7 @@ class AppNavigationTest {
         composeRule.onNodeWithText("正在恢复登录状态").assertIsDisplayed()
 
         composeRule.runOnUiThread { status = SessionStatus.SignedOut }
-        composeRule.onNodeWithText("登录功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithText("欢迎回来").assertIsDisplayed()
 
         composeRule.runOnUiThread { status = SessionStatus.SignedIn(sampleUser()) }
         composeRule.onNodeWithText("首页功能即将接入").assertIsDisplayed()
@@ -69,8 +69,8 @@ class AppNavigationTest {
             PointQuestTheme { AppNavHost(status, navController = navController) }
         }
 
-        composeRule.runOnUiThread { navController.navigate(AppRoute.Register) }
-        composeRule.onNodeWithText("注册功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithText("还没有账号？注册账号").performClick()
+        composeRule.onNodeWithText("创建学生账号").assertIsDisplayed()
         composeRule.runOnUiThread { status = SessionStatus.SignedIn(sampleUser()) }
         composeRule.onNodeWithText("首页功能即将接入").assertIsDisplayed()
         composeRule.runOnIdle { assertFalse(navController.popBackStack()) }
@@ -78,7 +78,7 @@ class AppNavigationTest {
         composeRule.runOnUiThread { navController.navigate(AppRoute.Practice) }
         composeRule.onNodeWithText("练习功能即将接入").assertIsDisplayed()
         composeRule.runOnUiThread { status = SessionStatus.SignedOut }
-        composeRule.onNodeWithText("登录功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithText("欢迎回来").assertIsDisplayed()
         composeRule.runOnIdle { assertFalse(navController.popBackStack()) }
     }
 

@@ -74,7 +74,7 @@ class AccessibilitySmokeTest {
             CompositionLocalProvider(
                 LocalDensity provides Density(density.density, fontScale = 1.5f),
             ) {
-                AppNavigationTestShell(SessionStatus.SignedIn(testStudent()))
+                AppNavigationTestShell(FakeAppSession(SessionStatus.SignedIn(testStudent())))
             }
         }
 

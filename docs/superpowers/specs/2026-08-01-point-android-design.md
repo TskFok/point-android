@@ -102,7 +102,7 @@ OpenAPI 中的接口路径已经包含 `/api/v1`，因此 Retrofit Base URL 只�
 - Debug：`http://10.0.2.2:3000/`
 - Release：Gradle 属性 `pointApiBaseUrl`，必须显式提供且使用 `https://`
 
-商品图片固定使用相同 API Origin 下的 `/uploads/{imageKey}`。客户端校验 `imageKey` 为受信任的相对路径，不接受绝对 URL 或路径穿越片段。
+商品图片固定使用相同 API Origin 下的 `/uploads/{imageKey}`。客户端只接受匹配 `^products/[0-9a-f-]{36}\.(jpg|png|webp)$` 的相对键，并继续校验 UUID；绝对 URL、路径穿越、无效 UUID 和其他扩展名统一显示内置占位图。
 
 ## 代码结构
 
@@ -176,7 +176,7 @@ com.pointquest.android
 
 ### 商城
 
-商品列表调用 `/api/v1/products`，固定 `isActive=true`，支持 `search`、分页和下拉刷新。搜索文本变化后使用短延迟去抖并回到第 1 页。
+商品列表调用 `/api/v1/products`，固定 `isActive=true`，支持 `search`、分页和下拉刷新。搜索文本变化后去抖 300 毫秒并回到第 1 页。
 
 商品详情展示图片、名称、描述、库存、所需积分和当前余额。兑换前弹出二次确认；确认后调用 `POST /api/v1/orders`。成功返回订单及最新余额，并导航至订单详情。
 
@@ -280,9 +280,11 @@ Access Token 不写入文件、SharedPreferences、日志、崩溃报告或 URL�
 - HTTP 5xx
 - `CONCURRENT_MODIFICATION`
 
-一次用户操作最多发送 3 次业务尝试，使用指数退避和少量随机抖动。鉴权刷新恢复在整个操作中最多发生一次。`IDEMPOTENCY_CONFLICT`、未知 4xx 和其他稳定业务错误不自动重试。
+一次用户操作最多发送 3 次业务尝试。第 1、2 次失败后的基础退避分别为 250 和 500 毫秒，每次增加 0–100 毫秒的可注入随机抖动。鉴权刷新恢复在整个操作中最多发生一次。`IDEMPOTENCY_CONFLICT`、未知 4xx 和其他稳定业务错误不自动重试。
 
 用户修改答案、改选商品或在错误状态明确点击重新提交时，才创建新的操作、Key 和冻结载荷。
+
+GET 读取请求遇到网络 I/O 失败或 5xx 时使用相同的最多 3 次策略，但不需要幂等键。注册、登录、刷新和退出不自动重试；尤其刷新请求若响应丢失，旧 Refresh Token 可能已被服务端撤销，此时清除会话并要求重新登录，不能再次发送旧 Token。
 
 ## 分页
 
@@ -335,7 +337,8 @@ UI 只按稳定 `code` 分支，不解析中文 `message`：
 - 失败日志只记录 HTTP 状态、稳定错误码和 `requestId`。
 - 密码输入使用安全键盘类型，失败后清除密码字段。
 - 商品图片只从配置的 API Origin 加载，并对 `imageKey` 做格式校验。
-- 所有网络超时都有明确上限；取消协程时不转换成可重试网络错误。
+- OkHttp 连接超时 10 秒、读取超时 20 秒、写入超时 20 秒、整次调用超时 30 秒。
+- 取消协程时不转换成可重试网络错误。
 
 ## 测试策略
 

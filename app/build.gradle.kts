@@ -190,5 +190,7 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.turbine)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

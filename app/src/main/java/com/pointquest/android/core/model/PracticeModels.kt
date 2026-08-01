@@ -1,5 +1,7 @@
 package com.pointquest.android.core.model
 
+import java.time.Instant
+
 data class PracticeSummary(
     val activeTotal: Int,
     val balance: Int,
@@ -31,4 +33,11 @@ data class AnswerResult(
     val explanation: String,
     val pointsAwarded: Int,
     val selectedOptionId: String,
+)
+
+data class WrongQuestion(
+    val errorCount: Int,
+    val firstAnsweredAt: Instant,
+    val masteredAt: Instant?,
+    val question: Question,
 )

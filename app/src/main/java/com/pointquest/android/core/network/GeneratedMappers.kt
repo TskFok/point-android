@@ -6,21 +6,25 @@ import com.pointquest.android.core.model.OrderStatus
 import com.pointquest.android.core.model.PageMeta
 import com.pointquest.android.core.model.PointLedgerEntry
 import com.pointquest.android.core.model.PointLedgerType
+import com.pointquest.android.core.model.PracticeSummary
 import com.pointquest.android.core.model.Product
 import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.model.QuestionOption
 import com.pointquest.android.core.model.TokenBundle
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
+import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.generated.model.AnswerResultDto
 import com.pointquest.android.generated.model.AuthRefresh201Response
 import com.pointquest.android.generated.model.LearnerQuestionDto
 import com.pointquest.android.generated.model.OrderDto
 import com.pointquest.android.generated.model.PageMetaDto
 import com.pointquest.android.generated.model.PointLedgerDto
+import com.pointquest.android.generated.model.PracticeSummaryDto
 import com.pointquest.android.generated.model.ProductDto
 import com.pointquest.android.generated.model.PublicUserDto
 import com.pointquest.android.generated.model.TokenResponseDto
+import com.pointquest.android.generated.model.WrongQuestionItemDto
 import java.time.Instant
 
 fun TokenResponseDto.toDomain(now: Instant): TokenBundle = TokenBundle(
@@ -61,6 +65,22 @@ fun AnswerResultDto.toDomain(): AnswerResult = AnswerResult(
     explanation = explanation,
     pointsAwarded = pointsAwarded,
     selectedOptionId = selectedOptionId,
+)
+
+fun PracticeSummaryDto.toDomain(): PracticeSummary = PracticeSummary(
+    activeTotal = activeTotal,
+    balance = balance,
+    firstAnsweredCount = firstAnsweredCount,
+    masteredWrongCount = masteredWrongCount,
+    pendingWrongCount = pendingWrongCount,
+    unansweredCount = unansweredCount,
+)
+
+fun WrongQuestionItemDto.toDomain(): WrongQuestion = WrongQuestion(
+    errorCount = errorCount,
+    firstAnsweredAt = firstAnsweredAt.toInstant(),
+    masteredAt = masteredAt?.toInstant(),
+    question = question.toDomain(),
 )
 
 fun ProductDto.toDomain(): Product = Product(

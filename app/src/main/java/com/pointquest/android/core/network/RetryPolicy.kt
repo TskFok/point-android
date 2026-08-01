@@ -14,7 +14,16 @@ data class RetryPolicy(
             "baseDelaysMs must provide a delay for every retry."
         }
         require(baseDelaysMs.all { it >= 0 }) { "baseDelaysMs cannot contain negative values." }
-        require(maxJitterMs >= 0) { "maxJitterMs cannot be negative." }
+        require(maxJitterMs in 0..MAX_JITTER_MS) {
+            "maxJitterMs must be between 0 and $MAX_JITTER_MS."
+        }
+        require(baseDelaysMs.all { it <= Long.MAX_VALUE - maxJitterMs }) {
+            "baseDelaysMs plus maxJitterMs must not overflow Long."
+        }
+    }
+
+    private companion object {
+        const val MAX_JITTER_MS = 100L
     }
 }
 

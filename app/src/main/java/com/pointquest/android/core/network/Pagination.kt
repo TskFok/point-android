@@ -14,11 +14,13 @@ sealed interface PageAdjustment {
 data class PagedState<T>(
     val items: List<T> = emptyList(),
     val meta: PageMeta = EMPTY_META,
+    val adjustment: PageAdjustment? = null,
 ) {
     val canLoadMore: Boolean
         get() = meta.totalPages > 0 && meta.page < meta.totalPages
 
     fun <K> merge(page: Page<T>, keySelector: (T) -> K): PagedState<T> {
+        page.meta.responseAdjustment()?.let { return copy(adjustment = it) }
         if (page.meta.totalPages == 0) return PagedState(emptyList(), page.meta)
 
         val candidates = if (page.meta.page <= FIRST_PAGE) page.items else items + page.items
@@ -33,6 +35,15 @@ data class PagedState<T>(
         requestedPage > meta.totalPages.coerceAtLeast(FIRST_PAGE) ->
             PageAdjustment.Reload(meta.totalPages.coerceAtLeast(FIRST_PAGE))
         else -> null
+    }
+
+    private fun PageMeta.responseAdjustment(): PageAdjustment? {
+        val lastValidPage = totalPages.coerceAtLeast(FIRST_PAGE)
+        return when {
+            page < FIRST_PAGE -> PageAdjustment.Reload(FIRST_PAGE)
+            page > lastValidPage -> PageAdjustment.Reload(lastValidPage)
+            else -> null
+        }
     }
 
     private companion object {

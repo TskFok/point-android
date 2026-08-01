@@ -98,7 +98,10 @@ class RetryExecutorTest {
     @Test
     fun idempotencyConflictAndClientErrorsAreNotRetried() = runBlocking {
         val delayProvider = RecordingDelayProvider()
-        val executor = RetryExecutor(delayProvider = delayProvider)
+        val executor = RetryExecutor(
+            delayProvider = delayProvider,
+            jitterSource = RecordingJitterSource(0, 0),
+        )
         var conflictAttempts = 0
         var clientErrorAttempts = 0
 
@@ -116,6 +119,43 @@ class RetryExecutorTest {
         assertEquals(1, conflictAttempts)
         assertEquals(1, clientErrorAttempts)
         assertTrue(delayProvider.delays.isEmpty())
+    }
+
+    @Test
+    fun clientStatusOverridesRetryableErrorCodesExceptConcurrentModificationForWrites() = runBlocking {
+        val delayProvider = RecordingDelayProvider()
+        val executor = RetryExecutor(
+            delayProvider = delayProvider,
+            jitterSource = RecordingJitterSource(0, 0),
+        )
+        var readAttempts = 0
+        var writeAttempts = 0
+        var concurrentModificationAttempts = 0
+
+        val read = executor.executeRead<Unit> {
+            readAttempts++
+            failure(httpStatus = 400, code = "NETWORK_ERROR")
+        }
+        val write = executor.executeIdempotent("payload") {
+            writeAttempts++
+            failure(httpStatus = 400, code = "NETWORK_ERROR")
+        }
+        val concurrentModification = executor.executeIdempotent("payload") {
+            concurrentModificationAttempts++
+            if (concurrentModificationAttempts < 3) {
+                failure(httpStatus = 409, code = "CONCURRENT_MODIFICATION")
+            } else {
+                AppResult.Success("saved")
+            }
+        }
+
+        assertEquals("NETWORK_ERROR", (read as AppResult.Failure).error.code)
+        assertEquals("NETWORK_ERROR", (write as AppResult.Failure).error.code)
+        assertEquals("saved", (concurrentModification as AppResult.Success).value)
+        assertEquals(1, readAttempts)
+        assertEquals(1, writeAttempts)
+        assertEquals(3, concurrentModificationAttempts)
+        assertEquals(listOf(250L, 500L), delayProvider.delays)
     }
 
     @Test
@@ -180,12 +220,28 @@ class RetryExecutorTest {
         assertIllegalArgument { RetryPolicy(maxAttempts = 2, baseDelaysMs = listOf(-1)) }
         assertIllegalArgument { RetryPolicy(maxAttempts = 1, baseDelaysMs = listOf(-1)) }
         assertIllegalArgument { RetryPolicy(maxJitterMs = -1) }
+        assertIllegalArgument { RetryPolicy(maxJitterMs = 101) }
+        assertIllegalArgument { RetryPolicy(baseDelaysMs = listOf(Long.MAX_VALUE, 500)) }
+    }
+
+    @Test
+    fun policyAcceptsLargestDelayThatCanSafelyIncludeMaximumJitter() {
+        val policy = RetryPolicy(
+            maxAttempts = 2,
+            baseDelaysMs = listOf(Long.MAX_VALUE - 100),
+            maxJitterMs = 100,
+        )
+
+        assertEquals(Long.MAX_VALUE - 100, policy.baseDelaysMs.single())
+        assertEquals(100, policy.maxJitterMs)
     }
 
     @Test
     fun jitterOutsideConfiguredRangeIsRejected() = runBlocking {
+        val delayProvider = RecordingDelayProvider()
         val executor = RetryExecutor(
             policy = RetryPolicy(maxAttempts = 2, baseDelaysMs = listOf(1), maxJitterMs = 10),
+            delayProvider = delayProvider,
             jitterSource = RecordingJitterSource(11),
         )
 
@@ -195,6 +251,8 @@ class RetryExecutorTest {
         } catch (actual: IllegalStateException) {
             assertEquals("Jitter source returned a value outside the configured range.", actual.message)
         }
+
+        assertTrue(delayProvider.delays.isEmpty())
     }
 
     private class RecordingDelayProvider : DelayProvider {

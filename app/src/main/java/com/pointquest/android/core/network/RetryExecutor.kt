@@ -59,20 +59,27 @@ class RetryExecutor(
     }
 
     private fun isReadRetryable(error: AppError): Boolean =
-        !error.isNeverRetryable() && (error.code == NETWORK_ERROR || error.httpStatus in 500..599)
+        !error.isNeverRetryable() &&
+            !error.isClientError() &&
+            (error.code == NETWORK_ERROR || error.httpStatus in 500..599)
 
     private fun isIdempotentRetryable(error: AppError): Boolean =
-        !error.isNeverRetryable() && (
-            error.code == CONCURRENT_MODIFICATION ||
-                error.code == NETWORK_ERROR ||
-                error.httpStatus in 500..599
-            )
+        when {
+            error.isNeverRetryable() -> false
+            error.isClientError() -> error.code == CONCURRENT_MODIFICATION
+            else ->
+                error.code == CONCURRENT_MODIFICATION ||
+                    error.code == NETWORK_ERROR ||
+                    error.httpStatus in 500..599
+        }
 
     private fun AppError.isNeverRetryable(): Boolean =
         code == IDEMPOTENCY_CONFLICT ||
             code.startsWith("AUTH_") ||
             httpStatus == 401 ||
             httpStatus == 403
+
+    private fun AppError.isClientError(): Boolean = httpStatus in 400..499
 
     private companion object {
         const val NETWORK_ERROR = "NETWORK_ERROR"

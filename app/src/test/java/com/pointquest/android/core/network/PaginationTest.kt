@@ -62,6 +62,40 @@ class PaginationTest {
         assertEquals(PageAdjustment.Reload(3), state.adjustmentFor(requestedPage = 4))
     }
 
+    @Test
+    fun responseOutsideItsShrunkenServerRangeKeepsPriorStateAndRequestsReload() {
+        val state = PagedState(
+            items = listOf(item("existing")),
+            meta = meta(page = 2, totalPages = 3),
+        )
+
+        val merged = state.merge(
+            page(items = listOf(item("invalid-page")), meta = meta(page = 3, totalPages = 2)),
+        ) { it.id }
+
+        assertEquals(listOf("existing"), merged.items.map { it.id })
+        assertEquals(2, merged.meta.page)
+        assertEquals(3, merged.meta.totalPages)
+        assertEquals(PageAdjustment.Reload(2), merged.adjustment)
+    }
+
+    @Test
+    fun responseBelowFirstPageKeepsPriorItemsAndRequestsFirstPage() {
+        val state = PagedState(
+            items = listOf(item("existing")),
+            meta = meta(page = 1, totalPages = 3),
+        )
+
+        val merged = state.merge(
+            page(items = listOf(item("invalid-page")), meta = meta(page = 0, totalPages = 3)),
+        ) { it.id }
+
+        assertEquals(listOf("existing"), merged.items.map { it.id })
+        assertEquals(1, merged.meta.page)
+        assertEquals(3, merged.meta.totalPages)
+        assertEquals(PageAdjustment.Reload(1), merged.adjustment)
+    }
+
     private data class Item(val id: String)
 
     private fun item(id: String) = Item(id)

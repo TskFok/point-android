@@ -22,6 +22,7 @@ import com.pointquest.android.data.practice.PracticeRepository
 import com.pointquest.android.data.products.DefaultProductsRepository
 import com.pointquest.android.data.products.ProductImageUrlFactory
 import com.pointquest.android.data.products.ProductsRepository
+import com.pointquest.android.feature.practice.PracticeDraftStore
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 
@@ -57,6 +58,7 @@ class AppContainer(
         authorizedCallExecutor,
         retryExecutor,
     )
+    val practiceDraftStore = PracticeDraftStore()
     val pointsRepository: PointsRepository = DefaultPointsRepository(
         studentGateway,
         authorizedCallExecutor,

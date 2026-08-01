@@ -1,0 +1,125 @@
+package com.pointquest.android.feature.practice
+
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.pointquest.android.app.PracticeMode
+import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.Question
+import com.pointquest.android.core.model.QuestionOption
+import com.pointquest.android.core.ui.theme.PointQuestTheme
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class QuestionScreenTest {
+    @get:Rule
+    val composeRule = createComposeRule()
+
+    @Test
+    fun submitIsDisabledUntilAnOptionIsSelectedAndMeetsTouchTarget() {
+        composeRule.setContent {
+            PointQuestTheme {
+                QuestionScreen(
+                    state = QuestionUiState(mode = PracticeMode.FIRST, loading = false, question = question),
+                    onSelectOption = {},
+                    onSubmit = {},
+                    onNext = {},
+                    onRetry = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("question_submit")
+            .assertHeightIsAtLeast(48.dp)
+            .assertIsNotEnabled()
+        composeRule.onNodeWithTag("question_option_o1").assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun submittedAnswerUsesTextIconAndSemanticsForCorrectAndWrongOptions() {
+        composeRule.setContent {
+            PointQuestTheme {
+                QuestionScreen(
+                    state = QuestionUiState(
+                        mode = PracticeMode.FIRST,
+                        loading = false,
+                        question = question,
+                        selectedOptionId = "o1",
+                        submitted = true,
+                        result = result,
+                    ),
+                    onSelectOption = {},
+                    onSubmit = {},
+                    onNext = {},
+                    onRetry = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("正确答案").assertIsDisplayed()
+        composeRule.onNodeWithText("你的答案不正确").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("正确选项图标").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("错误选项图标").assertIsDisplayed()
+        composeRule.onNodeWithTag("question_option_o2").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "正确选项"),
+        )
+        composeRule.onNodeWithTag("question_option_o1").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已选择，回答错误"),
+        )
+    }
+
+    @Test
+    fun optionContentRemainsVisibleAtLargeFontScale() {
+        composeRule.setContent {
+            PointQuestTheme {
+                CompositionLocalProvider(LocalDensity provides Density(1f, fontScale = 2.2f)) {
+                    QuestionScreen(
+                        state = QuestionUiState(mode = PracticeMode.FIRST, loading = false, question = question),
+                        onSelectOption = {},
+                        onSubmit = {},
+                        onNext = {},
+                        onRetry = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("这是一个较长的选项内容，用来验证大字体不会被裁切").assertIsDisplayed()
+        composeRule.onNodeWithTag("question_option_o1").assertHeightIsAtLeast(64.dp)
+    }
+
+    private companion object {
+        val question = Question(
+            id = "q1",
+            stem = "1 + 1 等于多少？",
+            basePoints = 5,
+            options = listOf(
+                QuestionOption("o1", "A", "这是一个较长的选项内容，用来验证大字体不会被裁切", 1),
+                QuestionOption("o2", "B", "2", 2),
+            ),
+        )
+        val result = AnswerResult(
+            balance = 50,
+            correct = false,
+            correctOptionId = "o2",
+            errorCount = 1,
+            explanation = "1 + 1 = 2",
+            pointsAwarded = 0,
+            selectedOptionId = "o1",
+        )
+    }
+}

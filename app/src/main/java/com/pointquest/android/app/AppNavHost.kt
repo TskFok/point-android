@@ -49,6 +49,12 @@ import com.pointquest.android.feature.home.HomeScreen
 import com.pointquest.android.feature.home.HomeViewModel
 import com.pointquest.android.feature.profile.ProfileScreen
 import com.pointquest.android.feature.profile.ProfileViewModel
+import com.pointquest.android.feature.practice.PracticeHubScreen
+import com.pointquest.android.feature.practice.QuestionEvent
+import com.pointquest.android.feature.practice.QuestionScreen
+import com.pointquest.android.feature.practice.QuestionViewModel
+import com.pointquest.android.feature.practice.WrongQuestionsScreen
+import com.pointquest.android.feature.practice.WrongQuestionsViewModel
 
 @Composable
 fun AppNavHost(
@@ -173,7 +179,15 @@ fun AppNavHost(
             }
         }
         composable<AppRoute.Practice> {
-            PlaceholderScreen(navController, AppRoute.Practice, R.string.practice_title, R.string.practice_placeholder)
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Practice, R.string.practice_title, R.string.practice_placeholder)
+            } else {
+                PracticeHubScreen(
+                    onFirstPractice = { navController.navigate(AppRoute.Question(PracticeMode.FIRST, null)) },
+                    onWrongQuestions = { navController.navigate(AppRoute.WrongQuestions) },
+                    bottomBar = { TopLevelNavigationBar(navController) },
+                )
+            }
         }
         composable<AppRoute.Shop> {
             PlaceholderScreen(navController, AppRoute.Shop, R.string.shop_title, R.string.shop_placeholder)
@@ -201,20 +215,126 @@ fun AppNavHost(
             }
         }
         composable<AppRoute.Question> { entry ->
-            PlaceholderScreen(
-                navController,
-                entry.toRoute<AppRoute.Question>(),
-                R.string.question_title,
-                R.string.question_placeholder,
-            )
+            val route = entry.toRoute<AppRoute.Question>()
+            if (container == null) {
+                PlaceholderScreen(
+                    navController,
+                    route,
+                    R.string.question_title,
+                    R.string.question_placeholder,
+                )
+            } else {
+                val factory = remember(container, route) {
+                    ViewModelFactory<QuestionViewModel> {
+                        QuestionViewModel(
+                            repository = container.practiceRepository,
+                            mode = route.mode,
+                            draftStore = container.practiceDraftStore,
+                            questionId = route.questionId,
+                        )
+                    }
+                }
+                val questionViewModel: QuestionViewModel = viewModel(factory = factory)
+                val state by questionViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(questionViewModel) { questionViewModel.load() }
+                LaunchedEffect(questionViewModel, navController) {
+                    questionViewModel.events.collect { event ->
+                        when (event) {
+                            QuestionEvent.DraftMissing -> {
+                                val previousEntry = navController.previousBackStackEntry
+                                if (previousEntry != null) {
+                                    previousEntry.savedStateHandle.set(DRAFT_EXPIRED_KEY, true)
+                                    navController.popBackStack()
+                                } else {
+                                    navController.navigate(AppRoute.WrongQuestions) {
+                                        popUpTo<AppRoute.Question> { inclusive = true }
+                                    }
+                                    navController.currentBackStackEntry
+                                        ?.savedStateHandle
+                                        ?.set(DRAFT_EXPIRED_KEY, true)
+                                }
+                            }
+                            is QuestionEvent.WrongMastered -> {
+                                navController.previousBackStackEntry
+                                    ?.savedStateHandle
+                                    ?.set(MASTERED_QUESTION_KEY, event.questionId)
+                                if (event.returnToList && !navController.popBackStack()) {
+                                    navController.navigate(AppRoute.WrongQuestions) {
+                                        popUpTo<AppRoute.Question> { inclusive = true }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                QuestionScreen(
+                    state = state,
+                    onSelectOption = questionViewModel::selectOption,
+                    onSubmit = { questionViewModel.submit() },
+                    onNext = {
+                        when (route.mode) {
+                            PracticeMode.FIRST -> if (state.completed) {
+                                if (!navController.popBackStack()) navController.navigate(AppRoute.Practice)
+                            } else {
+                                questionViewModel.loadFirstQuestion()
+                            }
+                            PracticeMode.WRONG -> if (!navController.popBackStack()) {
+                                navController.navigate(AppRoute.WrongQuestions)
+                            }
+                        }
+                    },
+                    onRetry = questionViewModel::load,
+                )
+            }
         }
-        composable<AppRoute.WrongQuestions> {
-            PlaceholderScreen(
-                navController,
-                AppRoute.WrongQuestions,
-                R.string.wrong_questions_title,
-                R.string.wrong_questions_placeholder,
-            )
+        composable<AppRoute.WrongQuestions> { entry ->
+            if (container == null) {
+                PlaceholderScreen(
+                    navController,
+                    AppRoute.WrongQuestions,
+                    R.string.wrong_questions_title,
+                    R.string.wrong_questions_placeholder,
+                )
+            } else {
+                val factory = remember(container.practiceRepository) {
+                    ViewModelFactory<WrongQuestionsViewModel> {
+                        WrongQuestionsViewModel(container.practiceRepository)
+                    }
+                }
+                val wrongQuestionsViewModel: WrongQuestionsViewModel = viewModel(factory = factory)
+                val state by wrongQuestionsViewModel.uiState.collectAsStateWithLifecycle()
+                val masteredQuestionId by entry.savedStateHandle
+                    .getStateFlow<String?>(MASTERED_QUESTION_KEY, null)
+                    .collectAsStateWithLifecycle()
+                val draftExpired by entry.savedStateHandle
+                    .getStateFlow(DRAFT_EXPIRED_KEY, false)
+                    .collectAsStateWithLifecycle()
+                LaunchedEffect(wrongQuestionsViewModel) { wrongQuestionsViewModel.load() }
+                LaunchedEffect(masteredQuestionId) {
+                    masteredQuestionId?.let { questionId ->
+                        wrongQuestionsViewModel.removeMastered(questionId)
+                        entry.savedStateHandle.remove<String>(MASTERED_QUESTION_KEY)
+                    }
+                }
+                LaunchedEffect(draftExpired) {
+                    if (draftExpired) {
+                        wrongQuestionsViewModel.showDraftExpiredNotice()
+                        entry.savedStateHandle.remove<Boolean>(DRAFT_EXPIRED_KEY)
+                    }
+                }
+                WrongQuestionsScreen(
+                    state = state,
+                    onRetry = wrongQuestionsViewModel::load,
+                    onLoadMore = { wrongQuestionsViewModel.loadMore() },
+                    onSelectQuestion = { wrongQuestion ->
+                        container.practiceDraftStore.put(wrongQuestion)
+                        navController.navigate(
+                            AppRoute.Question(PracticeMode.WRONG, wrongQuestion.question.id),
+                        )
+                    },
+                    onNoticeShown = wrongQuestionsViewModel::clearNotice,
+                )
+            }
         }
         composable<AppRoute.ProductDetail> { entry ->
             PlaceholderScreen(
@@ -242,6 +362,8 @@ fun AppNavHost(
 }
 
 private const val REGISTERED_USERNAME_KEY = "registered_username"
+private const val MASTERED_QUESTION_KEY = "mastered_question"
+private const val DRAFT_EXPIRED_KEY = "draft_expired"
 
 @Composable
 private fun SplashScreen() {

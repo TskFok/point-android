@@ -31,6 +31,7 @@ class AuthViewModel(
             username = value,
             usernameError = null,
             message = null,
+            messageTone = null,
         )
     }
 
@@ -40,6 +41,7 @@ class AuthViewModel(
             password = value,
             passwordError = null,
             message = null,
+            messageTone = null,
         )
     }
 
@@ -49,6 +51,7 @@ class AuthViewModel(
             confirmPassword = value,
             confirmPasswordError = null,
             message = null,
+            messageTone = null,
         )
     }
 
@@ -61,6 +64,7 @@ class AuthViewModel(
             } else {
                 null
             },
+            messageTone = if (registrationSucceeded) AuthMessageTone.Success else null,
         )
     }
 
@@ -86,6 +90,7 @@ class AuthViewModel(
             usernameError = null,
             passwordError = null,
             message = null,
+            messageTone = null,
         )
         return scope.launch {
             try {
@@ -137,6 +142,7 @@ class AuthViewModel(
             passwordError = null,
             confirmPasswordError = null,
             message = null,
+            messageTone = null,
         )
         return scope.launch {
             try {
@@ -162,7 +168,10 @@ class AuthViewModel(
                 passwordError = UiText.Resource(R.string.auth_error_invalid_credentials),
             )
             "VALIDATION_FAILED" -> mutableUiState.value.withValidationDetails(error)
-            else -> mutableUiState.value.copy(message = UiErrorMapper.map(error))
+            else -> mutableUiState.value.copy(
+                message = UiErrorMapper.map(error),
+                messageTone = AuthMessageTone.Error,
+            )
         }
     }
 
@@ -172,39 +181,40 @@ class AuthViewModel(
             "USERNAME_ALREADY_EXISTS", "CONFLICT" -> mutableUiState.value.copy(
                 usernameError = UiText.Resource(R.string.auth_error_username_exists),
             )
-            else -> mutableUiState.value.copy(message = UiErrorMapper.map(error))
+            else -> mutableUiState.value.copy(
+                message = UiErrorMapper.map(error),
+                messageTone = AuthMessageTone.Error,
+            )
         }
     }
 
     private fun AuthUiState.withValidationDetails(error: AppError): AuthUiState {
-        val usernameRejected = containsField(error.details, "username")
-        val passwordRejected = containsField(error.details, "password")
+        val rejectedFields = validationFields(error.details)
+        val usernameRejected = "username" in rejectedFields
+        val passwordRejected = "password" in rejectedFields
+        val confirmPasswordRejected = "confirmPassword" in rejectedFields
         return copy(
             usernameError = if (usernameRejected) UiText.Resource(R.string.auth_error_username_rejected) else null,
             passwordError = if (passwordRejected) UiText.Resource(R.string.auth_error_password_rejected) else null,
-            message = if (!usernameRejected && !passwordRejected) {
+            confirmPasswordError = if (confirmPasswordRejected) {
+                UiText.Resource(R.string.auth_error_confirm_password_rejected)
+            } else {
+                null
+            },
+            message = if (!usernameRejected && !passwordRejected && !confirmPasswordRejected) {
                 UiText.Resource(R.string.auth_error_validation)
             } else {
                 null
             },
+            messageTone = AuthMessageTone.Error,
         )
     }
 
-    private fun containsField(value: Any?, expected: String, depth: Int = 0): Boolean {
-        if (depth > MAX_DETAILS_DEPTH) return false
-        return when (value) {
-            is Map<*, *> -> value.entries.take(MAX_DETAILS_ITEMS).any { entry ->
-                (entry.key as? String)?.equals(expected, ignoreCase = true) == true ||
-                    ((entry.key as? String)?.equals("field", ignoreCase = true) == true &&
-                        (entry.value as? String)?.equals(expected, ignoreCase = true) == true) ||
-                    containsField(entry.value, expected, depth + 1)
-            }
-            is Iterable<*> -> value.take(MAX_DETAILS_ITEMS).any {
-                containsField(it, expected, depth + 1)
-            }
-            else -> false
-        }
-    }
+    private fun validationFields(details: Map<String, Any?>): Set<String> =
+        (details["errors"] as? List<*>)
+            ?.mapNotNull { (it as? Map<*, *>)?.get("field") as? String }
+            ?.filterTo(mutableSetOf()) { it in VALIDATION_FIELDS }
+            .orEmpty()
 
     private val scope: CoroutineScope
         get() = scopeOverride ?: viewModelScope
@@ -212,8 +222,7 @@ class AuthViewModel(
     private companion object {
         val USERNAME_PATTERN = Regex("^[a-z0-9_]{3,32}$")
         val PASSWORD_PATTERN = Regex("^(?=.*[A-Za-z])(?=.*[0-9]).{10,}$")
-        const val MAX_DETAILS_DEPTH = 4
-        const val MAX_DETAILS_ITEMS = 32
+        val VALIDATION_FIELDS = setOf("username", "password", "confirmPassword")
 
         fun isValidRegistrationPassword(password: String): Boolean = PASSWORD_PATTERN.matches(password)
     }

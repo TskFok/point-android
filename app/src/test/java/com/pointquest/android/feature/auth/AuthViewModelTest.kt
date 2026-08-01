@@ -38,6 +38,23 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun registrationPrefillMarksMessageAsSuccessWhileRequestFailuresRemainErrors() {
+        val successViewModel = viewModel(FakeAuthRepository())
+        successViewModel.prefillUsername("student", registrationSucceeded = true)
+
+        assertEquals(AuthMessageTone.Success, successViewModel.uiState.value.messageTone)
+
+        val failureViewModel = viewModel(
+            FakeAuthRepository(loginResult = failure("NETWORK_ERROR")),
+        )
+        failureViewModel.updateUsername("student")
+        failureViewModel.updatePassword("password123")
+        failureViewModel.login()
+
+        assertEquals(AuthMessageTone.Error, failureViewModel.uiState.value.messageTone)
+    }
+
+    @Test
     fun registerValidatesExactUsernamePasswordAndConfirmationRulesBeforeCallingRepository() {
         val repository = FakeAuthRepository()
         val viewModel = viewModel(repository)
@@ -93,7 +110,9 @@ class AuthViewModelTest {
                     code = "VALIDATION_FAILED",
                     message = "bad payload",
                     requestId = "request-1",
-                    details = mapOf("fields" to listOf(42, null, mapOf("other" to Any()))),
+                    details = mapOf(
+                        "errors" to listOf(42, null, mapOf("field" to 7), mapOf("field" to "other")),
+                    ),
                 ),
             ),
         )
@@ -110,6 +129,39 @@ class AuthViewModelTest {
     }
 
     @Test
+    fun validationMetadataAndEchoedValuesNeverBecomeFieldErrors() {
+        val repository = FakeAuthRepository(
+            registerResult = AppResult.Failure(
+                AppError(
+                    httpStatus = 400,
+                    code = "VALIDATION_FAILED",
+                    message = "ignored",
+                    requestId = null,
+                    details = mapOf(
+                        "errors" to listOf(mapOf("field" to "other")),
+                        "metadata" to mapOf(
+                            "username" to "submitted-value",
+                            "nested" to mapOf("field" to "password"),
+                        ),
+                        "password" to "echoed-value",
+                    ),
+                ),
+            ),
+        )
+        val viewModel = viewModel(repository)
+        viewModel.updateUsername("student_1")
+        viewModel.updatePassword("password123")
+        viewModel.updateConfirmPassword("password123")
+
+        viewModel.register()
+
+        assertNull(viewModel.uiState.value.usernameError)
+        assertNull(viewModel.uiState.value.passwordError)
+        assertNull(viewModel.uiState.value.confirmPasswordError)
+        assertEquals(UiText.Resource(R.string.auth_error_validation), viewModel.uiState.value.message)
+    }
+
+    @Test
     fun serverFieldDetailsMapOnlyKnownFieldsToStableMessages() {
         val repository = FakeAuthRepository(
             registerResult = AppResult.Failure(
@@ -122,6 +174,7 @@ class AuthViewModelTest {
                         "errors" to listOf(
                             mapOf("field" to "username", "constraints" to listOf("server copy")),
                             mapOf("field" to "password", "constraints" to listOf("server copy")),
+                            mapOf("field" to "confirmPassword", "constraints" to listOf("server copy")),
                         ),
                     ),
                 ),
@@ -136,6 +189,10 @@ class AuthViewModelTest {
 
         assertEquals(UiText.Resource(R.string.auth_error_username_rejected), viewModel.uiState.value.usernameError)
         assertEquals(UiText.Resource(R.string.auth_error_password_rejected), viewModel.uiState.value.passwordError)
+        assertEquals(
+            UiText.Resource(R.string.auth_error_confirm_password_rejected),
+            viewModel.uiState.value.confirmPasswordError,
+        )
         assertNull(viewModel.uiState.value.message)
     }
 

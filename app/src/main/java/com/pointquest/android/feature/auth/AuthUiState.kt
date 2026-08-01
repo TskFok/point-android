@@ -11,7 +11,10 @@ data class AuthUiState(
     val confirmPasswordError: UiText? = null,
     val submitting: Boolean = false,
     val message: UiText? = null,
+    val messageTone: AuthMessageTone? = null,
 )
+
+enum class AuthMessageTone { Success, Error }
 
 sealed interface AuthEvent {
     data class RegistrationSucceeded(val username: String) : AuthEvent

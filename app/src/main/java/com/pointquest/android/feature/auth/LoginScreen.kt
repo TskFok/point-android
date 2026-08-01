@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -20,6 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -29,6 +33,8 @@ import com.pointquest.android.core.ui.asString
 import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointPrimaryButton
 import com.pointquest.android.core.ui.components.PointScaffold
+import com.pointquest.android.core.ui.theme.ErrorText
+import com.pointquest.android.core.ui.theme.SuccessText
 
 @Composable
 fun LoginScreen(
@@ -45,7 +51,16 @@ fun LoginScreen(
                 text = stringResource(R.string.login_welcome),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            state.message?.let { Text(it.asString(), color = MaterialTheme.colorScheme.tertiary) }
+            state.message?.let { message ->
+                Text(
+                    text = message.asString(),
+                    color = when (state.messageTone) {
+                        AuthMessageTone.Success -> SuccessText
+                        AuthMessageTone.Error, null -> ErrorText
+                    },
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
             AuthTextField(
                 value = state.username,
                 onValueChange = onUsernameChange,
@@ -137,13 +152,18 @@ internal fun AuthTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
-        supportingText = error?.let { message -> { Text(message) } },
+        supportingText = error?.let { message -> { Text(message, color = ErrorText) } },
         isError = error != null,
         enabled = enabled,
         singleLine = true,
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+        colors = OutlinedTextFieldDefaults.colors(
+            errorTextColor = ErrorText,
+            errorLabelColor = ErrorText,
+            errorSupportingTextColor = ErrorText,
+        ),
         modifier = modifier.fillMaxWidth(),
     )
 }

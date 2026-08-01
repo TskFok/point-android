@@ -29,6 +29,7 @@
     <string name="auth_error_validation">提交内容未通过校验，请检查后重试</string>
     <string name="auth_error_username_rejected">用户名未通过校验</string>
     <string name="auth_error_password_rejected">密码未通过校验</string>
+    <string name="auth_error_confirm_password_rejected">确认密码未通过校验</string>
     <string name="auth_error_username_exists">该用户名已被使用</string>
     <string name="auth_password_helper">密码至少 10 位，并同时包含字母和数字</string>
     <string name="login_placeholder">登录功能即将接入</string>

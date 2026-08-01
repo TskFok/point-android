@@ -11,6 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -18,6 +21,8 @@ import com.pointquest.android.R
 import com.pointquest.android.core.ui.asString
 import com.pointquest.android.core.ui.components.PointPrimaryButton
 import com.pointquest.android.core.ui.components.PointScaffold
+import com.pointquest.android.core.ui.theme.ErrorText
+import com.pointquest.android.core.ui.theme.SuccessText
 
 @Composable
 fun RegisterScreen(
@@ -35,7 +40,16 @@ fun RegisterScreen(
                 text = stringResource(R.string.register_welcome),
                 style = MaterialTheme.typography.headlineSmall,
             )
-            state.message?.let { Text(it.asString(), color = MaterialTheme.colorScheme.error) }
+            state.message?.let { message ->
+                Text(
+                    text = message.asString(),
+                    color = when (state.messageTone) {
+                        AuthMessageTone.Success -> SuccessText
+                        AuthMessageTone.Error, null -> ErrorText
+                    },
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
             AuthTextField(
                 value = state.username,
                 onValueChange = onUsernameChange,
@@ -75,6 +89,7 @@ fun RegisterScreen(
             Text(
                 text = stringResource(R.string.auth_password_helper),
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             PointPrimaryButton(
                 text = if (state.submitting) {

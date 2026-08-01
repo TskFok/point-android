@@ -36,6 +36,24 @@ class ThemeContrastTest {
         )
     }
 
+    @Test
+    fun authenticationTextColorsMeetWcagAaAgainstProductionWhiteSurface() {
+        val pairs = listOf(
+            "auth success text" to SuccessText,
+            "auth error text" to ErrorText,
+            "auth helper text" to ClassroomInk,
+        )
+        val failures = pairs.mapNotNull { (name, foreground) ->
+            val contrast = contrastRatio(foreground, ClassroomSurface)
+            if (contrast < MIN_NORMAL_TEXT_CONTRAST) "$name=${"%.3f".format(contrast)}:1" else null
+        }
+
+        assertTrue(
+            "Authentication text colors below 4.5:1 on white: ${failures.joinToString()}",
+            failures.isEmpty(),
+        )
+    }
+
     private fun contrastRatio(first: Color, second: Color): Double {
         val firstLuminance = relativeLuminance(first)
         val secondLuminance = relativeLuminance(second)

@@ -10,4 +10,4 @@ val ClassroomInk = Color(0xFF16304A)
 val SuccessGreen = Color(0xFF238B57)
 val ErrorRed = Color(0xFFD64545)
 val ClassroomOnBlue = Color(0xFF00101F)
-val ClassroomOnGreen = Color(0xFF001B0D)
+val ClassroomOnStrongColor = Color.Black

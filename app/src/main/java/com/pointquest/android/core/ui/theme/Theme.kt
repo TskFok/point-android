@@ -4,19 +4,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-private val PointQuestColorScheme = lightColorScheme(
+internal val PointQuestColorScheme = lightColorScheme(
     primary = ClassroomBlue,
     onPrimary = ClassroomOnBlue,
     secondary = RewardYellow,
     onSecondary = ClassroomInk,
     tertiary = SuccessGreen,
-    onTertiary = ClassroomOnGreen,
+    onTertiary = ClassroomOnStrongColor,
     background = ClassroomBackground,
     onBackground = ClassroomInk,
     surface = ClassroomSurface,
     onSurface = ClassroomInk,
     error = ErrorRed,
-    onError = ClassroomSurface,
+    onError = ClassroomOnStrongColor,
 )
 
 @Composable

@@ -32,6 +32,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.pointquest.android.R
 import com.pointquest.android.core.auth.SessionStatus
 import com.pointquest.android.core.ui.components.PointCard
@@ -48,10 +49,15 @@ fun AppNavHost(
 
     LaunchedEffect(sessionStatus) {
         val target = resolver.resolve(sessionStatus)
-        if (!navController.currentDestination.matches(target)) {
-            navController.navigate(target) {
-                popUpTo(navController.graph.id) { inclusive = true }
-                launchSingleTop = true
+        AppNavigationPolicy.rootRequest(
+            sessionStatus = sessionStatus,
+            alreadyAtTarget = navController.currentDestination.matches(target),
+        )?.let { request ->
+            navController.navigate(request.target) {
+                if (request.clearBackStack) {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                }
+                launchSingleTop = request.launchSingleTop
             }
         }
     }
@@ -63,40 +69,60 @@ fun AppNavHost(
     ) {
         composable<AppRoute.Splash> { SplashScreen() }
         composable<AppRoute.Login> {
-            PlaceholderScreen(R.string.login_title, R.string.login_placeholder)
+            PlaceholderScreen(navController, AppRoute.Login, R.string.login_title, R.string.login_placeholder)
         }
         composable<AppRoute.Register> {
-            PlaceholderScreen(R.string.register_title, R.string.register_placeholder)
+            PlaceholderScreen(navController, AppRoute.Register, R.string.register_title, R.string.register_placeholder)
         }
         composable<AppRoute.Home> {
-            TopLevelPlaceholder(navController, R.string.home_title, R.string.home_placeholder)
+            PlaceholderScreen(navController, AppRoute.Home, R.string.home_title, R.string.home_placeholder)
         }
         composable<AppRoute.Practice> {
-            TopLevelPlaceholder(navController, R.string.practice_title, R.string.practice_placeholder)
+            PlaceholderScreen(navController, AppRoute.Practice, R.string.practice_title, R.string.practice_placeholder)
         }
         composable<AppRoute.Shop> {
-            TopLevelPlaceholder(navController, R.string.shop_title, R.string.shop_placeholder)
+            PlaceholderScreen(navController, AppRoute.Shop, R.string.shop_title, R.string.shop_placeholder)
         }
         composable<AppRoute.Profile> {
-            TopLevelPlaceholder(navController, R.string.profile_title, R.string.profile_placeholder)
+            PlaceholderScreen(navController, AppRoute.Profile, R.string.profile_title, R.string.profile_placeholder)
         }
-        composable<AppRoute.Question> {
-            PlaceholderScreen(R.string.question_title, R.string.question_placeholder)
+        composable<AppRoute.Question> { entry ->
+            PlaceholderScreen(
+                navController,
+                entry.toRoute<AppRoute.Question>(),
+                R.string.question_title,
+                R.string.question_placeholder,
+            )
         }
         composable<AppRoute.WrongQuestions> {
-            PlaceholderScreen(R.string.wrong_questions_title, R.string.wrong_questions_placeholder)
+            PlaceholderScreen(
+                navController,
+                AppRoute.WrongQuestions,
+                R.string.wrong_questions_title,
+                R.string.wrong_questions_placeholder,
+            )
         }
-        composable<AppRoute.ProductDetail> {
-            PlaceholderScreen(R.string.product_detail_title, R.string.product_detail_placeholder)
+        composable<AppRoute.ProductDetail> { entry ->
+            PlaceholderScreen(
+                navController,
+                entry.toRoute<AppRoute.ProductDetail>(),
+                R.string.product_detail_title,
+                R.string.product_detail_placeholder,
+            )
         }
         composable<AppRoute.Orders> {
-            PlaceholderScreen(R.string.orders_title, R.string.orders_placeholder)
+            PlaceholderScreen(navController, AppRoute.Orders, R.string.orders_title, R.string.orders_placeholder)
         }
-        composable<AppRoute.OrderDetail> {
-            PlaceholderScreen(R.string.order_detail_title, R.string.order_detail_placeholder)
+        composable<AppRoute.OrderDetail> { entry ->
+            PlaceholderScreen(
+                navController,
+                entry.toRoute<AppRoute.OrderDetail>(),
+                R.string.order_detail_title,
+                R.string.order_detail_placeholder,
+            )
         }
         composable<AppRoute.Points> {
-            PlaceholderScreen(R.string.points_title, R.string.points_placeholder)
+            PlaceholderScreen(navController, AppRoute.Points, R.string.points_title, R.string.points_placeholder)
         }
     }
 }
@@ -117,22 +143,20 @@ private fun SplashScreen() {
 }
 
 @Composable
-private fun TopLevelPlaceholder(
+private fun PlaceholderScreen(
     navController: NavHostController,
+    route: AppRoute,
     titleRes: Int,
     copyRes: Int,
 ) {
     PointScaffold(
         title = stringResource(titleRes),
-        bottomBar = { TopLevelNavigationBar(navController) },
+        bottomBar = {
+            if (AppNavigationPolicy.showsBottomBar(route)) {
+                TopLevelNavigationBar(navController)
+            }
+        },
     ) { padding -> PlaceholderBody(copyRes, Modifier.padding(padding)) }
-}
-
-@Composable
-private fun PlaceholderScreen(titleRes: Int, copyRes: Int) {
-    PointScaffold(title = stringResource(titleRes)) { padding ->
-        PlaceholderBody(copyRes, Modifier.padding(padding))
-    }
 }
 
 @Composable
@@ -181,10 +205,11 @@ private fun TopLevelNavigationBar(navController: NavHostController) {
 }
 
 private fun NavHostController.navigateTopLevel(route: AppRoute) {
-    navigate(route) {
-        popUpTo<AppRoute.Home> { saveState = true }
-        launchSingleTop = true
-        restoreState = true
+    val request = AppNavigationPolicy.topLevelRequest(route)
+    navigate(request.target) {
+        popUpTo(request.anchor) { saveState = request.saveState }
+        launchSingleTop = request.launchSingleTop
+        restoreState = request.restoreState
     }
 }
 

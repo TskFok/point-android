@@ -22,6 +22,26 @@ import org.junit.Test
 
 class WrongQuestionsViewModelTest {
     @Test
+    fun repeatedInitializationKeepsLoadedPagesWithoutAnotherRepositoryCall() = runBlocking {
+        val repository = FakePracticeRepository(
+            responses = arrayDequeOf(
+                immediate(page(1, 2, 2, wrong("q1"))),
+                immediate(page(2, 2, 2, wrong("q2"))),
+            ),
+        )
+        val viewModel = viewModel(repository)
+        viewModel.initialize()?.join()
+        viewModel.loadMore()?.join()
+
+        val duplicate = viewModel.initialize()
+
+        assertNull(duplicate)
+        assertEquals(listOf(1, 2), repository.pageCalls)
+        assertEquals(listOf("q1", "q2"), viewModel.uiState.value.items.map { it.question.id })
+        assertEquals(2, viewModel.uiState.value.paged.meta.page)
+    }
+
+    @Test
     fun laterPagesAppendOnlyUnseenQuestionsAndUseServerMeta() = runBlocking {
         val repository = FakePracticeRepository(
             responses = arrayDequeOf(

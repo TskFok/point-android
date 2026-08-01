@@ -32,6 +32,8 @@ class QuestionViewModel(
     private val loadGeneration = AtomicLong(0)
     private val shownQuestionIds = LinkedHashSet<String>()
     private val loadLock = Any()
+    private val initializationLock = Any()
+    private var initialized = false
 
     val uiState: StateFlow<QuestionUiState> = mutableUiState
     val events = eventChannel.receiveAsFlow()
@@ -40,6 +42,12 @@ class QuestionViewModel(
         private set
     var submitJob: Job? = null
         private set
+
+    fun initialize(): Job? = synchronized(initializationLock) {
+        if (initialized) return@synchronized null
+        initialized = true
+        load()
+    }
 
     fun load(): Job = when (mode) {
         PracticeMode.FIRST -> loadFirstQuestion()

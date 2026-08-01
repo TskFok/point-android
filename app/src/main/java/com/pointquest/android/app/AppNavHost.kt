@@ -236,7 +236,7 @@ fun AppNavHost(
                 }
                 val questionViewModel: QuestionViewModel = viewModel(factory = factory)
                 val state by questionViewModel.uiState.collectAsStateWithLifecycle()
-                LaunchedEffect(questionViewModel) { questionViewModel.load() }
+                LaunchedEffect(questionViewModel) { questionViewModel.initialize() }
                 LaunchedEffect(questionViewModel, navController) {
                     questionViewModel.events.collect { event ->
                         when (event) {
@@ -309,7 +309,7 @@ fun AppNavHost(
                 val draftExpired by entry.savedStateHandle
                     .getStateFlow(DRAFT_EXPIRED_KEY, false)
                     .collectAsStateWithLifecycle()
-                LaunchedEffect(wrongQuestionsViewModel) { wrongQuestionsViewModel.load() }
+                LaunchedEffect(wrongQuestionsViewModel) { wrongQuestionsViewModel.initialize() }
                 LaunchedEffect(masteredQuestionId) {
                     masteredQuestionId?.let { questionId ->
                         wrongQuestionsViewModel.removeMastered(questionId)

@@ -80,7 +80,15 @@ fun QuestionScreen(
                     }
                 }
                 state.error?.let { message ->
-                    item { Text(message.asString(), color = MaterialTheme.colorScheme.error) }
+                    item {
+                        Text(
+                            message.asString(),
+                            color = PracticeStatusColors.result(
+                                PracticeAnswerStatus.Incorrect,
+                                MaterialTheme.colorScheme.background,
+                            ).text,
+                        )
+                    }
                 }
                 if (!state.submitted) {
                     item {
@@ -119,6 +127,14 @@ private fun QuestionOptionCard(
     val selected = state.selectedOptionId == option.id
     val correct = state.submitted && state.result?.correctOptionId == option.id
     val wrong = state.submitted && selected && !correct
+    val answerStatus = when {
+        correct -> PracticeAnswerStatus.Correct
+        wrong -> PracticeAnswerStatus.Incorrect
+        else -> null
+    }
+    val statusColors = answerStatus?.let {
+        PracticeStatusColors.option(it, MaterialTheme.colorScheme.background)
+    }
     val stateCopy = stringResource(
         when {
             correct -> R.string.option_correct_state
@@ -128,14 +144,12 @@ private fun QuestionOptionCard(
         },
     )
     val accent = when {
-        correct -> MaterialTheme.colorScheme.tertiary
-        wrong -> MaterialTheme.colorScheme.error
+        statusColors != null -> statusColors.accent
         selected -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.outline
     }
     val background = when {
-        correct -> MaterialTheme.colorScheme.tertiary.copy(alpha = .14f)
-        wrong -> MaterialTheme.colorScheme.error.copy(alpha = .12f)
+        statusColors != null -> statusColors.container
         selected -> MaterialTheme.colorScheme.primary.copy(alpha = .1f)
         else -> MaterialTheme.colorScheme.surface
     }
@@ -158,19 +172,25 @@ private fun QuestionOptionCard(
         border = BorderStroke(if (selected || correct || wrong) 2.dp else 1.dp, accent),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(option.label, style = MaterialTheme.typography.labelLarge, color = accent)
+            Text(
+                option.label,
+                style = MaterialTheme.typography.labelLarge,
+                color = statusColors?.text ?: accent,
+            )
             Text(option.content, style = MaterialTheme.typography.bodyLarge)
             when {
                 correct -> OptionStatus(
                     text = stringResource(R.string.option_correct),
                     description = stringResource(R.string.option_correct_icon),
-                    color = MaterialTheme.colorScheme.tertiary,
+                    textColor = requireNotNull(statusColors).text,
+                    iconColor = statusColors.icon,
                     correct = true,
                 )
                 wrong -> OptionStatus(
                     text = stringResource(R.string.option_wrong),
                     description = stringResource(R.string.option_wrong_icon),
-                    color = MaterialTheme.colorScheme.error,
+                    textColor = requireNotNull(statusColors).text,
+                    iconColor = statusColors.icon,
                     correct = false,
                 )
             }
@@ -179,7 +199,13 @@ private fun QuestionOptionCard(
 }
 
 @Composable
-private fun OptionStatus(text: String, description: String, color: Color, correct: Boolean) {
+private fun OptionStatus(
+    text: String,
+    description: String,
+    textColor: Color,
+    iconColor: Color,
+    correct: Boolean,
+) {
     androidx.compose.foundation.layout.Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -187,14 +213,14 @@ private fun OptionStatus(text: String, description: String, color: Color, correc
         val stroke = with(LocalDensity.current) { 2.5.dp.toPx() }
         Canvas(Modifier.size(24.dp).semantics { contentDescription = description }) {
             if (correct) {
-                drawLine(color, Offset(size.width * .18f, size.height * .52f), Offset(size.width * .42f, size.height * .76f), stroke, StrokeCap.Round)
-                drawLine(color, Offset(size.width * .42f, size.height * .76f), Offset(size.width * .84f, size.height * .25f), stroke, StrokeCap.Round)
+                drawLine(iconColor, Offset(size.width * .18f, size.height * .52f), Offset(size.width * .42f, size.height * .76f), stroke, StrokeCap.Round)
+                drawLine(iconColor, Offset(size.width * .42f, size.height * .76f), Offset(size.width * .84f, size.height * .25f), stroke, StrokeCap.Round)
             } else {
-                drawLine(color, Offset(size.width * .24f, size.height * .24f), Offset(size.width * .76f, size.height * .76f), stroke, StrokeCap.Round)
-                drawLine(color, Offset(size.width * .76f, size.height * .24f), Offset(size.width * .24f, size.height * .76f), stroke, StrokeCap.Round)
+                drawLine(iconColor, Offset(size.width * .24f, size.height * .24f), Offset(size.width * .76f, size.height * .76f), stroke, StrokeCap.Round)
+                drawLine(iconColor, Offset(size.width * .76f, size.height * .24f), Offset(size.width * .24f, size.height * .76f), stroke, StrokeCap.Round)
             }
         }
-        Text(text, color = color, style = MaterialTheme.typography.labelLarge)
+        Text(text, color = textColor, style = MaterialTheme.typography.labelLarge)
     }
 }
 

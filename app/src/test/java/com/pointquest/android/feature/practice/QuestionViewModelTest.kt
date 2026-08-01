@@ -29,6 +29,49 @@ import org.junit.Test
 
 class QuestionViewModelTest {
     @Test
+    fun repeatedFirstInitializationKeepsSubmittedResultWithoutSecondRepositoryLoad() = runBlocking {
+        val answer = sampleAnswer(correct = true, selectedOptionId = "o2")
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(successQuestion("q1")),
+            firstAnswerResults = arrayDequeOf(AppResult.Success(answer)),
+        )
+        val viewModel = firstViewModel(repository)
+        viewModel.initialize()?.join()
+        viewModel.selectOption("o2")
+        viewModel.submit()?.join()
+
+        val duplicate = viewModel.initialize()
+
+        assertNull(duplicate)
+        assertEquals(listOf(emptyList<String>()), repository.excludeCalls)
+        assertEquals("q1", viewModel.uiState.value.question?.id)
+        assertEquals(answer, viewModel.uiState.value.result)
+        assertTrue(viewModel.uiState.value.submitted)
+    }
+
+    @Test
+    fun repeatedWrongInitializationConsumesDraftOnlyOnceAndKeepsQuestion() = runBlocking {
+        var consumeCalls = 0
+        val viewModel = QuestionViewModel(
+            repository = FakePracticeRepository(),
+            mode = PracticeMode.WRONG,
+            draftStore = PracticeDraftSource {
+                consumeCalls++
+                wrongQuestion("q1")
+            },
+            questionId = "q1",
+            scopeOverride = CoroutineScope(Job() + Dispatchers.Unconfined),
+        )
+
+        viewModel.initialize()?.join()
+        val duplicate = viewModel.initialize()
+
+        assertNull(duplicate)
+        assertEquals(1, consumeCalls)
+        assertEquals("q1", viewModel.uiState.value.question?.id)
+    }
+
+    @Test
     fun submitWithoutSelectionDoesNotCallRepository() = runBlocking {
         val repository = FakePracticeRepository(nextResults = loadResults(successQuestion("q1")))
         val viewModel = firstViewModel(repository)
@@ -162,7 +205,7 @@ class QuestionViewModelTest {
             scopeOverride = CoroutineScope(Job() + Dispatchers.Unconfined),
         )
         val event = async(start = CoroutineStart.UNDISPATCHED) { viewModel.events.first() }
-        viewModel.load().join()
+        viewModel.initialize()?.join()
         viewModel.selectOption("o2")
         viewModel.submit()?.join()
 
@@ -181,7 +224,7 @@ class QuestionViewModelTest {
         )
         val event = async(start = CoroutineStart.UNDISPATCHED) { viewModel.events.first() }
 
-        viewModel.load().join()
+        viewModel.initialize()?.join()
 
         assertEquals(QuestionEvent.DraftMissing, event.await())
         assertNull(viewModel.uiState.value.question)

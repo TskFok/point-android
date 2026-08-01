@@ -26,7 +26,8 @@ import com.pointquest.android.core.ui.components.PointCard
 @Composable
 fun AnswerResultCard(result: AnswerResult, modifier: Modifier = Modifier) {
     val title = stringResource(if (result.correct) R.string.answer_correct else R.string.answer_incorrect)
-    val color = if (result.correct) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
+    val status = if (result.correct) PracticeAnswerStatus.Correct else PracticeAnswerStatus.Incorrect
+    val colors = PracticeStatusColors.result(status, MaterialTheme.colorScheme.surface)
     PointCard(modifier) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -41,9 +42,9 @@ fun AnswerResultCard(result: AnswerResult, modifier: Modifier = Modifier) {
                     description = stringResource(
                         if (result.correct) R.string.answer_correct_icon else R.string.answer_incorrect_icon,
                     ),
-                    color = color,
+                    color = colors.icon,
                 )
-                Text(title, style = MaterialTheme.typography.titleLarge, color = color)
+                Text(title, style = MaterialTheme.typography.titleLarge, color = colors.text)
             }
             Text(result.explanation, style = MaterialTheme.typography.bodyLarge)
             Text(stringResource(R.string.answer_points_awarded, result.pointsAwarded))

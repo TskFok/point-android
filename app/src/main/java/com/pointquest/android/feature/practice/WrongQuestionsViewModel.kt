@@ -20,6 +20,8 @@ class WrongQuestionsViewModel(
     private val scopeOverride: CoroutineScope? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(WrongQuestionsUiState())
+    private val initializationLock = Any()
+    private var initialized = false
 
     val uiState: StateFlow<WrongQuestionsUiState> = mutableUiState
 
@@ -27,6 +29,12 @@ class WrongQuestionsViewModel(
         private set
     var loadMoreJob: Job? = null
         private set
+
+    fun initialize(): Job? = synchronized(initializationLock) {
+        if (initialized) return@synchronized null
+        initialized = true
+        load()
+    }
 
     fun load(): Job {
         loadingJob?.cancel()

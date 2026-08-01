@@ -12,6 +12,6 @@ fun PointQuestApp(container: AppContainer) {
     val sessionStatus by container.sessionState.status.collectAsStateWithLifecycle()
 
     PointQuestTheme {
-        AppNavHost(sessionStatus)
+        AppNavHost(sessionStatus = sessionStatus, container = container)
     }
 }

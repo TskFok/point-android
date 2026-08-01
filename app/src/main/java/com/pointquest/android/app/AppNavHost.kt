@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -33,16 +34,28 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pointquest.android.R
 import com.pointquest.android.core.auth.SessionStatus
+import com.pointquest.android.core.ui.ViewModelFactory
 import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointScaffold
+import com.pointquest.android.feature.auth.AuthEvent
+import com.pointquest.android.feature.auth.AuthViewModel
+import com.pointquest.android.feature.auth.LoginScreen
+import com.pointquest.android.feature.auth.RegisterScreen
+import com.pointquest.android.feature.home.HomeScreen
+import com.pointquest.android.feature.home.HomeViewModel
+import com.pointquest.android.feature.profile.ProfileScreen
+import com.pointquest.android.feature.profile.ProfileViewModel
 
 @Composable
 fun AppNavHost(
     sessionStatus: SessionStatus,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
+    container: AppContainer? = null,
 ) {
     val resolver = RootDestinationResolver()
     val startDestination = resolver.resolve(sessionStatus)
@@ -68,14 +81,96 @@ fun AppNavHost(
         modifier = modifier,
     ) {
         composable<AppRoute.Splash> { SplashScreen() }
-        composable<AppRoute.Login> {
-            PlaceholderScreen(navController, AppRoute.Login, R.string.login_title, R.string.login_placeholder)
+        composable<AppRoute.Login> { entry ->
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Login, R.string.login_title, R.string.login_placeholder)
+            } else {
+                val factory = remember(container.authRepository) {
+                    ViewModelFactory<AuthViewModel> { AuthViewModel(container.authRepository) }
+                }
+                val authViewModel: AuthViewModel = viewModel(factory = factory)
+                val state by authViewModel.uiState.collectAsStateWithLifecycle()
+                val registeredUsername by entry.savedStateHandle
+                    .getStateFlow<String?>(REGISTERED_USERNAME_KEY, null)
+                    .collectAsStateWithLifecycle()
+                LaunchedEffect(registeredUsername) {
+                    registeredUsername?.let { username ->
+                        authViewModel.prefillUsername(username, registrationSucceeded = true)
+                        entry.savedStateHandle.remove<String>(REGISTERED_USERNAME_KEY)
+                    }
+                }
+                LoginScreen(
+                    state = state,
+                    onUsernameChange = authViewModel::updateUsername,
+                    onPasswordChange = authViewModel::updatePassword,
+                    onLogin = { authViewModel.login() },
+                    onRegister = { navController.navigate(AppRoute.Register) },
+                )
+            }
         }
         composable<AppRoute.Register> {
-            PlaceholderScreen(navController, AppRoute.Register, R.string.register_title, R.string.register_placeholder)
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Register, R.string.register_title, R.string.register_placeholder)
+            } else {
+                val factory = remember(container.authRepository) {
+                    ViewModelFactory<AuthViewModel> { AuthViewModel(container.authRepository) }
+                }
+                val authViewModel: AuthViewModel = viewModel(factory = factory)
+                val state by authViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(authViewModel) {
+                    for (event in authViewModel.events) {
+                        when (event) {
+                            is AuthEvent.RegistrationSucceeded -> {
+                                navController.previousBackStackEntry
+                                    ?.savedStateHandle
+                                    ?.set(REGISTERED_USERNAME_KEY, event.username)
+                                if (!navController.popBackStack()) {
+                                    navController.navigate(AppRoute.Login)
+                                    navController.currentBackStackEntry
+                                        ?.savedStateHandle
+                                        ?.set(REGISTERED_USERNAME_KEY, event.username)
+                                }
+                            }
+                        }
+                    }
+                }
+                RegisterScreen(
+                    state = state,
+                    onUsernameChange = authViewModel::updateUsername,
+                    onPasswordChange = authViewModel::updatePassword,
+                    onConfirmPasswordChange = authViewModel::updateConfirmPassword,
+                    onRegister = { authViewModel.register() },
+                    onBackToLogin = {
+                        if (!navController.popBackStack()) navController.navigate(AppRoute.Login)
+                    },
+                )
+            }
         }
         composable<AppRoute.Home> {
-            PlaceholderScreen(navController, AppRoute.Home, R.string.home_title, R.string.home_placeholder)
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Home, R.string.home_title, R.string.home_placeholder)
+            } else {
+                val factory = remember(container) {
+                    ViewModelFactory<HomeViewModel> {
+                        HomeViewModel(
+                            container.practiceRepository,
+                            container.pointsRepository,
+                            container.sessionState,
+                        )
+                    }
+                }
+                val homeViewModel: HomeViewModel = viewModel(factory = factory)
+                val state by homeViewModel.uiState.collectAsStateWithLifecycle()
+                HomeScreen(
+                    state = state,
+                    onRetry = { homeViewModel.retry() },
+                    onStartPractice = { navController.navigate(AppRoute.Question(PracticeMode.FIRST, null)) },
+                    onWrongQuestions = { navController.navigate(AppRoute.WrongQuestions) },
+                    onOrders = { navController.navigate(AppRoute.Orders) },
+                    onPoints = { navController.navigate(AppRoute.Points) },
+                    bottomBar = { TopLevelNavigationBar(navController) },
+                )
+            }
         }
         composable<AppRoute.Practice> {
             PlaceholderScreen(navController, AppRoute.Practice, R.string.practice_title, R.string.practice_placeholder)
@@ -84,7 +179,26 @@ fun AppNavHost(
             PlaceholderScreen(navController, AppRoute.Shop, R.string.shop_title, R.string.shop_placeholder)
         }
         composable<AppRoute.Profile> {
-            PlaceholderScreen(navController, AppRoute.Profile, R.string.profile_title, R.string.profile_placeholder)
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Profile, R.string.profile_title, R.string.profile_placeholder)
+            } else {
+                val factory = remember(container) {
+                    ViewModelFactory<ProfileViewModel> {
+                        ProfileViewModel(container.authRepository, container.sessionState)
+                    }
+                }
+                val profileViewModel: ProfileViewModel = viewModel(factory = factory)
+                val state by profileViewModel.uiState.collectAsStateWithLifecycle()
+                ProfileScreen(
+                    state = state,
+                    onOrders = { navController.navigate(AppRoute.Orders) },
+                    onPoints = { navController.navigate(AppRoute.Points) },
+                    onRequestLogout = profileViewModel::requestLogout,
+                    onDismissLogout = profileViewModel::dismissLogout,
+                    onConfirmLogout = { profileViewModel.confirmLogout() },
+                    bottomBar = { TopLevelNavigationBar(navController) },
+                )
+            }
         }
         composable<AppRoute.Question> { entry ->
             PlaceholderScreen(
@@ -126,6 +240,8 @@ fun AppNavHost(
         }
     }
 }
+
+private const val REGISTERED_USERNAME_KEY = "registered_username"
 
 @Composable
 private fun SplashScreen() {

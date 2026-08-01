@@ -47,6 +47,12 @@ import com.pointquest.android.feature.auth.LoginScreen
 import com.pointquest.android.feature.auth.RegisterScreen
 import com.pointquest.android.feature.home.HomeScreen
 import com.pointquest.android.feature.home.HomeViewModel
+import com.pointquest.android.feature.orders.OrderDetailScreen
+import com.pointquest.android.feature.orders.OrderDetailViewModel
+import com.pointquest.android.feature.orders.OrderListScreen
+import com.pointquest.android.feature.orders.OrderListViewModel
+import com.pointquest.android.feature.points.PointsScreen
+import com.pointquest.android.feature.points.PointsViewModel
 import com.pointquest.android.feature.profile.ProfileScreen
 import com.pointquest.android.feature.profile.ProfileViewModel
 import com.pointquest.android.feature.practice.PracticeHubScreen
@@ -55,6 +61,11 @@ import com.pointquest.android.feature.practice.QuestionScreen
 import com.pointquest.android.feature.practice.QuestionViewModel
 import com.pointquest.android.feature.practice.WrongQuestionsScreen
 import com.pointquest.android.feature.practice.WrongQuestionsViewModel
+import com.pointquest.android.feature.shop.ProductDetailEvent
+import com.pointquest.android.feature.shop.ProductDetailScreen
+import com.pointquest.android.feature.shop.ProductDetailViewModel
+import com.pointquest.android.feature.shop.ProductListScreen
+import com.pointquest.android.feature.shop.ProductListViewModel
 
 @Composable
 fun AppNavHost(
@@ -190,7 +201,29 @@ fun AppNavHost(
             }
         }
         composable<AppRoute.Shop> {
-            PlaceholderScreen(navController, AppRoute.Shop, R.string.shop_title, R.string.shop_placeholder)
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Shop, R.string.shop_title, R.string.shop_placeholder)
+            } else {
+                val factory = remember(container.productsRepository) {
+                    ViewModelFactory<ProductListViewModel> {
+                        ProductListViewModel(container.productsRepository)
+                    }
+                }
+                val productListViewModel: ProductListViewModel = viewModel(factory = factory)
+                val state by productListViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(productListViewModel) { productListViewModel.initialize() }
+                ProductListScreen(
+                    state = state,
+                    imageUrlFactory = container.productImageUrlFactory,
+                    onSearchChange = productListViewModel::updateSearch,
+                    onRetry = { productListViewModel.retry() },
+                    onLoadMore = { productListViewModel.loadMore() },
+                    onProductClick = { product ->
+                        navController.navigate(AppRoute.ProductDetail(product.id))
+                    },
+                    bottomBar = { TopLevelNavigationBar(navController) },
+                )
+            }
         }
         composable<AppRoute.Profile> {
             if (container == null) {
@@ -337,26 +370,119 @@ fun AppNavHost(
             }
         }
         composable<AppRoute.ProductDetail> { entry ->
-            PlaceholderScreen(
-                navController,
-                entry.toRoute<AppRoute.ProductDetail>(),
-                R.string.product_detail_title,
-                R.string.product_detail_placeholder,
-            )
+            val route = entry.toRoute<AppRoute.ProductDetail>()
+            if (container == null) {
+                PlaceholderScreen(
+                    navController,
+                    route,
+                    R.string.product_detail_title,
+                    R.string.product_detail_placeholder,
+                )
+            } else {
+                val factory = remember(container, route.productId) {
+                    ViewModelFactory<ProductDetailViewModel> {
+                        ProductDetailViewModel(
+                            route.productId,
+                            container.productsRepository,
+                            container.ordersRepository,
+                            container.pointsRepository,
+                        )
+                    }
+                }
+                val productDetailViewModel: ProductDetailViewModel = viewModel(factory = factory)
+                val state by productDetailViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(productDetailViewModel) { productDetailViewModel.initialize() }
+                LaunchedEffect(productDetailViewModel, navController) {
+                    productDetailViewModel.events.collect { event ->
+                        when (event) {
+                            is ProductDetailEvent.NavigateToOrder -> {
+                                navController.navigate(AppRoute.OrderDetail(event.orderId))
+                            }
+                            ProductDetailEvent.ReturnToShop -> if (!navController.popBackStack()) {
+                                navController.navigate(AppRoute.Shop) {
+                                    popUpTo<AppRoute.ProductDetail> { inclusive = true }
+                                }
+                            }
+                        }
+                    }
+                }
+                ProductDetailScreen(
+                    state = state,
+                    imageUrlFactory = container.productImageUrlFactory,
+                    onRetry = { productDetailViewModel.retry() },
+                    onBack = {
+                        if (!navController.popBackStack()) navController.navigate(AppRoute.Shop)
+                    },
+                    onRequestRedeem = productDetailViewModel::requestRedeemConfirmation,
+                    onDismissRedeem = productDetailViewModel::dismissRedeemConfirmation,
+                    onConfirmRedeem = { productDetailViewModel.confirmRedeem() },
+                    onMessageShown = productDetailViewModel::clearMessage,
+                )
+            }
         }
         composable<AppRoute.Orders> {
-            PlaceholderScreen(navController, AppRoute.Orders, R.string.orders_title, R.string.orders_placeholder)
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Orders, R.string.orders_title, R.string.orders_placeholder)
+            } else {
+                val factory = remember(container.ordersRepository) {
+                    ViewModelFactory<OrderListViewModel> { OrderListViewModel(container.ordersRepository) }
+                }
+                val orderListViewModel: OrderListViewModel = viewModel(factory = factory)
+                val state by orderListViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(orderListViewModel) { orderListViewModel.initialize() }
+                OrderListScreen(
+                    state = state,
+                    imageUrlFactory = container.productImageUrlFactory,
+                    onRetry = { orderListViewModel.retry() },
+                    onLoadMore = { orderListViewModel.loadMore() },
+                    onOrderClick = { order -> navController.navigate(AppRoute.OrderDetail(order.id)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
         composable<AppRoute.OrderDetail> { entry ->
-            PlaceholderScreen(
-                navController,
-                entry.toRoute<AppRoute.OrderDetail>(),
-                R.string.order_detail_title,
-                R.string.order_detail_placeholder,
-            )
+            val route = entry.toRoute<AppRoute.OrderDetail>()
+            if (container == null) {
+                PlaceholderScreen(
+                    navController,
+                    route,
+                    R.string.order_detail_title,
+                    R.string.order_detail_placeholder,
+                )
+            } else {
+                val factory = remember(container.ordersRepository, route.orderId) {
+                    ViewModelFactory<OrderDetailViewModel> {
+                        OrderDetailViewModel(route.orderId, container.ordersRepository)
+                    }
+                }
+                val orderDetailViewModel: OrderDetailViewModel = viewModel(factory = factory)
+                val state by orderDetailViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(orderDetailViewModel) { orderDetailViewModel.initialize() }
+                OrderDetailScreen(
+                    state = state,
+                    imageUrlFactory = container.productImageUrlFactory,
+                    onRetry = { orderDetailViewModel.retry() },
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
         composable<AppRoute.Points> {
-            PlaceholderScreen(navController, AppRoute.Points, R.string.points_title, R.string.points_placeholder)
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Points, R.string.points_title, R.string.points_placeholder)
+            } else {
+                val factory = remember(container.pointsRepository) {
+                    ViewModelFactory<PointsViewModel> { PointsViewModel(container.pointsRepository) }
+                }
+                val pointsViewModel: PointsViewModel = viewModel(factory = factory)
+                val state by pointsViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(pointsViewModel) { pointsViewModel.initialize() }
+                PointsScreen(
+                    state = state,
+                    onRetry = { pointsViewModel.retry() },
+                    onLoadMore = { pointsViewModel.loadMore() },
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }

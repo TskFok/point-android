@@ -21,6 +21,20 @@ import org.junit.Test
 
 class SessionManagerTest {
     @Test
+    fun storedRefreshSessionIsReadThroughManager() = runBlocking {
+        val expected = StoredRefreshSession(
+            refreshToken = "refresh-token",
+            expiresAt = Instant.parse("2030-02-01T00:00:00Z"),
+        )
+        val store = FakeSessionStore().apply { lastWritten = expected }
+        val manager = SessionManager(store, SessionState())
+
+        val result = manager.readStoredRefreshSession()
+
+        assertEquals(expected, (result as AppResult.Success).value)
+    }
+
+    @Test
     fun storeFailureNeverPublishesAccessToken() = runBlocking {
         val store = FakeSessionStore(writeError = IOException("disk"))
         val state = SessionState()
@@ -290,7 +304,7 @@ class SessionManagerTest {
         var lastWritten: StoredRefreshSession? = null
         var writeBeforeError = false
 
-        override suspend fun read(): StoredRefreshSession? = null
+        override suspend fun read(): StoredRefreshSession? = lastWritten
 
         override suspend fun write(value: StoredRefreshSession) {
             onWrite?.invoke(value)

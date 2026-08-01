@@ -16,6 +16,24 @@ class SessionManager(
     private val mutex = Mutex()
     private var generation = state.active.value?.generation ?: 0L
 
+    suspend fun readStoredRefreshSession(): AppResult<StoredRefreshSession?> = mutex.withLock {
+        try {
+            AppResult.Success(store.read())
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            state.clear()
+            try {
+                store.clear()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                // Best effort: preserve the original read failure.
+            }
+            AppResult.Failure(sessionError(SESSION_STORE_READ_FAILED, failure))
+        }
+    }
+
     suspend fun install(bundle: TokenBundle): AppResult<ActiveSession> = try {
         mutex.withLock {
             val storedSession = StoredRefreshSession(
@@ -89,6 +107,7 @@ class SessionManager(
     )
 
     private companion object {
+        const val SESSION_STORE_READ_FAILED = "SESSION_STORE_READ_FAILED"
         const val SESSION_STORE_WRITE_FAILED = "SESSION_STORE_WRITE_FAILED"
         const val SESSION_STORE_CLEAR_FAILED = "SESSION_STORE_CLEAR_FAILED"
     }

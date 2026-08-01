@@ -152,7 +152,7 @@ class ProductDetailViewModel(
                 message = UiText.Resource(R.string.product_out_of_stock),
             )
             INSUFFICIENT_POINTS -> mutableUiState.value = mutableUiState.value.copy(
-                balance = safeBalance(error.details["balance"]) ?: mutableUiState.value.balance,
+                balance = safeBalance(error.details["balance"]),
                 redeeming = false,
                 message = UiText.Resource(R.string.product_insufficient_points),
             )
@@ -180,8 +180,12 @@ class ProductDetailViewModel(
         is Short -> value.toInt().takeIf { it >= 0 }
         is Int -> value.takeIf { it >= 0 }
         is Long -> value.takeIf { it in 0..Int.MAX_VALUE.toLong() }?.toInt()
-        is Float -> value.takeIf { it.isFinite() && it >= 0f && it % 1f == 0f && it <= Int.MAX_VALUE }?.toInt()
-        is Double -> value.takeIf { it.isFinite() && it >= 0.0 && it % 1.0 == 0.0 && it <= Int.MAX_VALUE }?.toInt()
+        is Float -> value.toDouble()
+            .takeIf { it.isFinite() && it >= 0.0 && it % 1.0 == 0.0 && it <= Int.MAX_VALUE.toDouble() }
+            ?.toInt()
+        is Double -> value
+            .takeIf { it.isFinite() && it >= 0.0 && it % 1.0 == 0.0 && it <= Int.MAX_VALUE.toDouble() }
+            ?.toInt()
         else -> null
     }
 

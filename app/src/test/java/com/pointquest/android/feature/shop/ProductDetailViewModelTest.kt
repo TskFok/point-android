@@ -103,7 +103,54 @@ class ProductDetailViewModelTest {
         val invalid = loadedViewModel(invalidOrders)
         invalid.requestRedeemConfirmation()
         invalid.confirmRedeem()?.join()
-        assertEquals(20, invalid.uiState.value.balance)
+        assertNull(invalid.uiState.value.balance)
+        assertFalse(invalid.uiState.value.canRedeem)
+    }
+
+    @Test
+    fun insufficientPointsRejectsOutOfRangeNumbersAndAcceptsExactSafeBoundaries() = runTest {
+        val rejectedBalances = listOf(
+            Float.NaN,
+            Float.POSITIVE_INFINITY,
+            -1f,
+            1.5f,
+            2_147_483_648f,
+            Double.NaN,
+            Double.POSITIVE_INFINITY,
+            -1.0,
+            1.5,
+            2_147_483_648.0,
+            Int.MAX_VALUE.toLong() + 1L,
+        )
+        rejectedBalances.forEach { reportedBalance ->
+            val orders = FakeOrdersRepository().apply {
+                enqueue(failure("INSUFFICIENT_POINTS", mapOf("balance" to reportedBalance)))
+            }
+            val viewModel = loadedViewModel(orders)
+
+            viewModel.requestRedeemConfirmation()
+            viewModel.confirmRedeem()?.join()
+
+            assertNull("应拒绝越界余额：$reportedBalance", viewModel.uiState.value.balance)
+            assertFalse(viewModel.uiState.value.canRedeem)
+        }
+
+        val acceptedBalances = listOf(
+            2_147_483_520f to 2_147_483_520,
+            Int.MAX_VALUE.toDouble() to Int.MAX_VALUE,
+            Int.MAX_VALUE.toLong() to Int.MAX_VALUE,
+        )
+        acceptedBalances.forEach { (reportedBalance, expected) ->
+            val orders = FakeOrdersRepository().apply {
+                enqueue(failure("INSUFFICIENT_POINTS", mapOf("balance" to reportedBalance)))
+            }
+            val viewModel = loadedViewModel(orders)
+
+            viewModel.requestRedeemConfirmation()
+            viewModel.confirmRedeem()?.join()
+
+            assertEquals(expected, viewModel.uiState.value.balance)
+        }
     }
 
     @Test

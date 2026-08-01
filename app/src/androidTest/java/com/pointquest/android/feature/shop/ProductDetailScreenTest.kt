@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -61,7 +62,7 @@ class ProductDetailScreenTest {
     }
 
     @Test
-    fun invalidImageShowsAccessiblePlaceholderAndLargeTextIsNotClipped() {
+    fun invalidImageAndRedeemActionRemainReachableAtTwoPointTwoFontScale() {
         composeRule.setContent {
             PointQuestTheme {
                 CompositionLocalProvider(LocalDensity provides Density(1f, fontScale = 2.2f)) {
@@ -80,7 +81,12 @@ class ProductDetailScreenTest {
         }
 
         composeRule.onNodeWithContentDescription("商品图片占位图").assertIsDisplayed()
-        composeRule.onNodeWithText(product.description).assertIsDisplayed()
+        composeRule.onNodeWithText(product.name).assertExists()
+        composeRule.onNodeWithText(product.description).assertExists()
+        composeRule.onNodeWithTag("product_redeem")
+            .performScrollTo()
+            .assertIsDisplayed()
+            .assertHeightIsAtLeast(48.dp)
     }
 
     private companion object {

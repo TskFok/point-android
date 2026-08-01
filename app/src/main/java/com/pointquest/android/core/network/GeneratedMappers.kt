@@ -116,20 +116,26 @@ fun PublicUserDto.toDomain(): User = User(
     pointsBalance = pointsBalance,
 )
 
-private fun PublicUserDto.Role.toDomain(): UserRole = when (value) {
+private fun PublicUserDto.Role.toDomain(): UserRole = userRoleFromWire(value)
+
+private fun OrderDto.Status.toDomain(): OrderStatus = orderStatusFromWire(value)
+
+private fun PointLedgerDto.Type.toDomain(): PointLedgerType = pointLedgerTypeFromWire(value)
+
+internal fun userRoleFromWire(value: String): UserRole = when (value) {
     "ADMIN" -> UserRole.ADMIN
     "STUDENT" -> UserRole.STUDENT
     else -> UserRole.UNKNOWN
 }
 
-private fun OrderDto.Status.toDomain(): OrderStatus = when (value) {
+internal fun orderStatusFromWire(value: String): OrderStatus = when (value) {
     "PENDING_PICKUP" -> OrderStatus.PENDING_PICKUP
     "COMPLETED" -> OrderStatus.COMPLETED
     "CANCELLED" -> OrderStatus.CANCELLED
     else -> OrderStatus.UNKNOWN
 }
 
-private fun PointLedgerDto.Type.toDomain(): PointLedgerType = when (value) {
+internal fun pointLedgerTypeFromWire(value: String): PointLedgerType = when (value) {
     "ANSWER_REWARD" -> PointLedgerType.ANSWER_REWARD
     "ORDER_REDEEM" -> PointLedgerType.ORDER_REDEEM
     "ORDER_REFUND" -> PointLedgerType.ORDER_REFUND

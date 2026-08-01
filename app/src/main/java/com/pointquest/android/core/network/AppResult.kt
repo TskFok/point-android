@@ -1,6 +1,6 @@
 package com.pointquest.android.core.network
 
-import kotlinx.coroutines.CancellationException
+import java.io.IOException
 import retrofit2.Response
 
 sealed interface AppResult<out T> {
@@ -18,16 +18,10 @@ fun <T, R> Response<T>.toAppResult(mapper: (T) -> R): AppResult<R> = when {
             requestId = null,
         ),
     )
-    else -> try {
-        AppResult.Success(mapper(requireNotNull(body())))
-    } catch (exception: CancellationException) {
-        throw exception
-    } catch (exception: Throwable) {
-        AppResult.Failure(exception.toNetworkError())
-    }
+    else -> AppResult.Success(mapper(requireNotNull(body())))
 }
 
-fun Throwable.toNetworkError(): AppError = AppError(
+fun IOException.toNetworkError(): AppError = AppError(
     httpStatus = null,
     code = "NETWORK_ERROR",
     message = "Network request failed",

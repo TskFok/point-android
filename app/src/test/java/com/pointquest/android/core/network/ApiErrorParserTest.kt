@@ -2,6 +2,7 @@ package com.pointquest.android.core.network
 
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CancellationException
+import java.io.IOException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -39,6 +40,28 @@ class ApiErrorParserTest {
     }
 
     @Test
+    fun usesHttpErrorForMalformedNonFiveHundredResponse() {
+        val response = Response.error<Unit>(
+            400,
+            "not-json".toResponseBody("text/plain".toMediaType()),
+        )
+
+        val error = ApiErrorParser(Moshi.Builder().build()).parse(response)
+
+        assertEquals("HTTP_ERROR", error.code)
+        assertEquals(400, error.httpStatus)
+    }
+
+    @Test
+    fun returnsEmptyResponseErrorForSuccessfulResponseWithoutBody() {
+        val result = Response.success<String>(null).toAppResult { it.length }
+
+        val error = (result as AppResult.Failure).error
+        assertEquals("EMPTY_RESPONSE", error.code)
+        assertEquals(200, error.httpStatus)
+    }
+
+    @Test
     fun rethrowsCancellationFromResponseMapper() {
         try {
             Response.success("value").toAppResult { throw CancellationException("cancel") }
@@ -46,5 +69,40 @@ class ApiErrorParserTest {
         } catch (_: CancellationException) {
             // Expected: cancellation is control flow and must not become an AppError.
         }
+    }
+
+    @Test
+    fun rethrowsOrdinaryMapperException() {
+        val expected = IllegalStateException("mapping failed")
+
+        try {
+            Response.success("value").toAppResult { throw expected }
+            fail("Mapper exception should be rethrown")
+        } catch (actual: IllegalStateException) {
+            assertEquals(expected, actual)
+        }
+    }
+
+    @Test
+    fun rethrowsMapperError() {
+        val expected = AssertionError("programming error")
+
+        try {
+            Response.success("value").toAppResult { throw expected }
+            fail("Mapper error should be rethrown")
+        } catch (actual: AssertionError) {
+            assertEquals(expected, actual)
+        }
+    }
+
+    @Test
+    fun mapsIoExceptionToNetworkErrorWithCause() {
+        val cause = IOException("offline")
+
+        val error = cause.toNetworkError()
+
+        assertEquals("NETWORK_ERROR", error.code)
+        assertEquals(null, error.httpStatus)
+        assertEquals(cause, error.cause)
     }
 }

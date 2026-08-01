@@ -1,7 +1,12 @@
 package com.pointquest.android.core.network
 
+import com.pointquest.android.core.model.Order
 import com.pointquest.android.core.model.OrderStatus
+import com.pointquest.android.core.model.PointLedgerEntry
 import com.pointquest.android.core.model.PointLedgerType
+import com.pointquest.android.core.model.Question
+import com.pointquest.android.core.model.QuestionOption
+import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.generated.model.AnswerResultDto
 import com.pointquest.android.generated.model.AuthRefresh201Response
 import com.pointquest.android.generated.model.LearnerQuestionDto
@@ -15,6 +20,7 @@ import com.pointquest.android.generated.model.TokenResponseDto
 import java.time.Instant
 import java.time.OffsetDateTime
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class GeneratedMappersTest {
@@ -70,16 +76,28 @@ class GeneratedMappersTest {
             basePoints = 3,
             id = "question_1",
             options = listOf(
-                LearnerQuestionOptionDto("C", "option_c", "C", 3),
-                LearnerQuestionOptionDto("A", "option_a", "A", 1),
-                LearnerQuestionOptionDto("B", "option_b", "B", 2),
+                LearnerQuestionOptionDto("内容 C", "option_c", "C", 3),
+                LearnerQuestionOptionDto("内容 A", "option_a", "A", 1),
+                LearnerQuestionOptionDto("内容 B", "option_b", "B", 2),
             ),
             stem = "题干",
         )
 
         val result = dto.toDomain()
 
-        assertEquals(listOf("option_a", "option_b", "option_c"), result.options.map { it.id })
+        assertEquals(
+            Question(
+                id = "question_1",
+                stem = "题干",
+                basePoints = 3,
+                options = listOf(
+                    QuestionOption("option_a", "A", "内容 A", 1),
+                    QuestionOption("option_b", "B", "内容 B", 2),
+                    QuestionOption("option_c", "C", "内容 C", 3),
+                ),
+            ),
+            result,
+        )
     }
 
     @Test
@@ -142,6 +160,53 @@ class GeneratedMappersTest {
     }
 
     @Test
+    fun mapsEveryOrderField() {
+        val result = OrderDto(
+            balance = 4,
+            cancelledAt = OffsetDateTime.parse("2026-08-01T03:00:00+03:00"),
+            completedAt = OffsetDateTime.parse("2026-08-01T02:00:00+02:00"),
+            createdAt = OffsetDateTime.parse("2026-08-01T00:00:00Z"),
+            id = "order_1",
+            orderNo = "O-1",
+            pointsCostSnapshot = 8,
+            productId = "product_1",
+            productImageKeySnapshot = "product.png",
+            productNameSnapshot = "商品",
+            status = OrderDto.Status.COMPLETED,
+            updatedBy = "admin_1",
+            userId = "user_1",
+        ).toDomain()
+
+        assertEquals(
+            Order(
+                id = "order_1",
+                orderNo = "O-1",
+                userId = "user_1",
+                productId = "product_1",
+                productNameSnapshot = "商品",
+                productImageKeySnapshot = "product.png",
+                pointsCostSnapshot = 8,
+                status = OrderStatus.COMPLETED,
+                balance = 4,
+                createdAt = Instant.parse("2026-08-01T00:00:00Z"),
+                completedAt = Instant.parse("2026-08-01T00:00:00Z"),
+                cancelledAt = Instant.parse("2026-08-01T00:00:00Z"),
+                updatedBy = "admin_1",
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun preservesNullableOrderFields() {
+        val result = order(OrderDto.Status.PENDING_PICKUP).toDomain()
+
+        assertNull(result.completedAt)
+        assertNull(result.cancelledAt)
+        assertNull(result.updatedBy)
+    }
+
+    @Test
     fun mapsEveryPointLedgerType() {
         val expected = mapOf(
             PointLedgerDto.Type.ANSWER_REWARD to PointLedgerType.ANSWER_REWARD,
@@ -152,6 +217,49 @@ class GeneratedMappersTest {
         expected.forEach { (source, target) ->
             assertEquals(target, ledger(source).toDomain().type)
         }
+    }
+
+    @Test
+    fun mapsEveryPointLedgerField() {
+        val result = PointLedgerDto(
+            answerAttemptId = "attempt_1",
+            balanceAfter = 5,
+            createdAt = OffsetDateTime.parse("2026-08-01T08:00:00+08:00"),
+            delta = 2,
+            id = "ledger_1",
+            orderId = "order_1",
+            type = PointLedgerDto.Type.ANSWER_REWARD,
+            userId = "user_1",
+        ).toDomain()
+
+        assertEquals(
+            PointLedgerEntry(
+                id = "ledger_1",
+                userId = "user_1",
+                type = PointLedgerType.ANSWER_REWARD,
+                delta = 2,
+                balanceAfter = 5,
+                answerAttemptId = "attempt_1",
+                orderId = "order_1",
+                createdAt = Instant.parse("2026-08-01T00:00:00Z"),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun preservesNullablePointLedgerAssociationIds() {
+        val result = ledger(PointLedgerDto.Type.ORDER_REFUND).toDomain()
+
+        assertNull(result.answerAttemptId)
+        assertNull(result.orderId)
+    }
+
+    @Test
+    fun mapsUnknownWireEnumValuesToUnknownDomainValues() {
+        assertEquals(UserRole.UNKNOWN, userRoleFromWire("SUSPENDED"))
+        assertEquals(OrderStatus.UNKNOWN, orderStatusFromWire("RETURNED"))
+        assertEquals(PointLedgerType.UNKNOWN, pointLedgerTypeFromWire("MANUAL_ADJUSTMENT"))
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStore
 import com.pointquest.android.core.auth.StoredRefreshSession
 import com.pointquest.android.core.model.PointLedgerType
+import com.pointquest.android.core.model.OrderStatus
 import com.pointquest.android.core.model.TokenBundle
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
@@ -148,6 +149,21 @@ class GeneratedStudentGatewayTest {
         assertNull(create.getHeader("X-CSRF-Token"))
         assertRequest("/api/v1/orders?page=3&pageSize=20")
         assertRequest("/api/v1/orders/ord%2F1")
+    }
+
+    @Test
+    fun unknownGeneratedEnumValueDeserializesAndMapsToDomainFallback() = runBlocking {
+        enqueue(
+            orderPageJson.replace(
+                "\"status\":\"PENDING_PICKUP\"",
+                "\"status\":\"RETURNED_BY_FUTURE_SERVER\"",
+            ),
+        )
+
+        val result = gateway.orders(1, 20)
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(OrderStatus.UNKNOWN, (result as AppResult.Success).value.items.single().status)
     }
 
     @Test

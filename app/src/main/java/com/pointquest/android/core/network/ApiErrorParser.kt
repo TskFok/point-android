@@ -15,7 +15,13 @@ class ApiErrorParser(moshi: Moshi) {
 
     fun parse(response: Response<*>): AppError {
         val payload = response.errorBody()
-            ?.let { body -> runCatching { errorBodyAdapter.fromJson(body.string()) }.getOrNull() }
+            ?.let { body ->
+                try {
+                    errorBodyAdapter.fromJson(body.string())
+                } catch (_: Exception) {
+                    null
+                }
+            }
         val code = payload?.get("code") as? String
         val message = payload?.get("message") as? String
         if (!code.isNullOrBlank() && !message.isNullOrBlank()) {

@@ -3,6 +3,7 @@ package com.pointquest.android.feature.shop
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.R
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.network.PageAdjustment
 import com.pointquest.android.core.network.PagedState
@@ -10,6 +11,7 @@ import com.pointquest.android.core.ui.UiErrorMapper
 import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.data.products.ProductsRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +26,7 @@ import kotlinx.coroutines.launch
 class ProductListViewModel(
     private val repository: ProductsRepository,
     private val scopeOverride: CoroutineScope? = null,
+    private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ProductListUiState())
     private val searchInput = MutableStateFlow("")
@@ -39,6 +42,8 @@ class ProductListViewModel(
         private set
     var loadMoreJob: Job? = null
         private set
+    var refreshJob: Job? = null
+        private set
 
     fun initialize(): Job? = synchronized(initializationLock) {
         if (initialized) return@synchronized null
@@ -53,6 +58,20 @@ class ProductListViewModel(
                     if (query != activeQuery) startFirstPage(query)
                 }
         }
+        appDataSync?.let { sync ->
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                sync.inactiveProductIds.collect { inactiveIds ->
+                    val state = mutableUiState.value
+                    val visible = state.items.filterNot { it.id in inactiveIds }
+                    if (visible.size != state.items.size) {
+                        mutableUiState.value = state.copy(paged = state.paged.copy(items = visible))
+                    }
+                }
+            }
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                sync.shopRefreshRevision.drop(1).collect { refresh() }
+            }
+        }
         startFirstPage(normalizeSearch(searchInput.value))
     }
 
@@ -64,6 +83,34 @@ class ProductListViewModel(
     fun retry(): Job? {
         if (loadingJob?.isActive == true) return null
         return startFirstPage(activeQuery)
+    }
+
+    fun refresh(): Job? {
+        val state = mutableUiState.value
+        if (state.loading || state.refreshing) return null
+        generation += 1
+        val requestGeneration = generation
+        loadMoreJob?.cancel()
+        mutableUiState.value = state.copy(
+            refreshing = true,
+            loadingMore = false,
+            refreshError = null,
+            loadMoreError = null,
+        )
+        return scope.launch {
+            requestPage(
+                query = activeQuery,
+                page = FIRST_PAGE,
+                initial = false,
+                requestGeneration = requestGeneration,
+                visited = mutableSetOf(),
+                refreshing = true,
+            )
+        }.also { refreshJob = it }
+    }
+
+    fun clearRefreshError() {
+        mutableUiState.value = mutableUiState.value.copy(refreshError = null)
     }
 
     fun loadMore(): Job? {
@@ -89,11 +136,14 @@ class ProductListViewModel(
         val requestGeneration = generation
         loadingJob?.cancel()
         loadMoreJob?.cancel()
+        refreshJob?.cancel()
         mutableUiState.value = mutableUiState.value.copy(
             paged = PagedState(),
             loading = true,
             loadingMore = false,
+            refreshing = false,
             error = null,
+            refreshError = null,
             loadMoreError = null,
         )
         return scope.launch {
@@ -107,30 +157,45 @@ class ProductListViewModel(
         initial: Boolean,
         requestGeneration: Long,
         visited: MutableSet<Int>,
+        refreshing: Boolean = false,
     ) {
         if (!visited.add(page)) {
-            if (requestGeneration == generation) finishWithAdjustmentError(initial)
+            if (requestGeneration == generation) finishWithAdjustmentError(initial, refreshing)
             return
         }
         when (val result = repository.page(query, page)) {
             is AppResult.Success -> {
                 if (requestGeneration != generation) return
                 val base = mutableUiState.value.paged.copy(adjustment = null)
-                val merged = base.merge(result.value, keySelector = { it.id })
+                val inactiveIds = appDataSync?.inactiveProductIds?.value.orEmpty()
+                val visiblePage = result.value.copy(
+                    items = result.value.items.filterNot { it.id in inactiveIds },
+                )
+                val merged = base.merge(visiblePage, keySelector = { it.id })
                 val adjustment = merged.adjustment
                 if (adjustment is PageAdjustment.Reload) {
                     mutableUiState.value = mutableUiState.value.copy(
                         paged = base,
-                        loading = initial,
-                        loadingMore = !initial,
+                        loading = initial && !refreshing,
+                        loadingMore = !initial && !refreshing,
+                        refreshing = refreshing,
                     )
-                    requestPage(query, adjustment.lastValidPage, initial, requestGeneration, visited)
+                    requestPage(
+                        query,
+                        adjustment.lastValidPage,
+                        initial,
+                        requestGeneration,
+                        visited,
+                        refreshing,
+                    )
                 } else {
                     mutableUiState.value = mutableUiState.value.copy(
                         paged = merged,
                         loading = false,
                         loadingMore = false,
+                        refreshing = false,
                         error = null,
+                        refreshError = null,
                         loadMoreError = null,
                     )
                 }
@@ -138,7 +203,12 @@ class ProductListViewModel(
             is AppResult.Failure -> {
                 if (requestGeneration != generation) return
                 val message = UiErrorMapper.map(result.error)
-                mutableUiState.value = if (initial) {
+                mutableUiState.value = if (refreshing) {
+                    mutableUiState.value.copy(
+                        refreshing = false,
+                        refreshError = message,
+                    )
+                } else if (initial) {
                     mutableUiState.value.copy(loading = false, loadingMore = false, error = message)
                 } else {
                     mutableUiState.value.copy(loadingMore = false, loadMoreError = message)
@@ -147,9 +217,11 @@ class ProductListViewModel(
         }
     }
 
-    private fun finishWithAdjustmentError(initial: Boolean) {
+    private fun finishWithAdjustmentError(initial: Boolean, refreshing: Boolean = false) {
         val message = UiText.Resource(R.string.product_page_changed)
-        mutableUiState.value = if (initial) {
+        mutableUiState.value = if (refreshing) {
+            mutableUiState.value.copy(refreshing = false, refreshError = message)
+        } else if (initial) {
             mutableUiState.value.copy(loading = false, loadingMore = false, error = message)
         } else {
             mutableUiState.value.copy(loadingMore = false, loadMoreError = message)

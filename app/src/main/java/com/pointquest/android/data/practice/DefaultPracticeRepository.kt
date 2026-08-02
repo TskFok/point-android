@@ -40,13 +40,15 @@ class DefaultPracticeRepository(
     }
 
     private suspend fun <T> read(operation: suspend () -> AppResult<T>): AppResult<T> =
-        retry.executeRead { authorized.execute(operation) }
+        authorized.executeOperation { retry.executeRead { execute(operation) } }
 
     private suspend fun <T> write(
         payload: AnswerPayload,
         operation: suspend (AnswerPayload, String) -> AppResult<T>,
-    ): AppResult<T> = retry.executeIdempotent(payload) { frozen ->
-        authorized.execute { operation(frozen.payload, frozen.key) }
+    ): AppResult<T> = authorized.executeOperation {
+        retry.executeIdempotent(payload) { frozen ->
+            execute { operation(frozen.payload, frozen.key) }
+        }
     }
 
     private data class AnswerPayload(val questionId: String, val selectedOptionId: String)

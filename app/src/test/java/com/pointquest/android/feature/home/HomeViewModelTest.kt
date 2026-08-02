@@ -1,6 +1,7 @@
 package com.pointquest.android.feature.home
 
 import com.pointquest.android.R
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.ActiveSession
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.AnswerResult
@@ -94,6 +95,31 @@ class HomeViewModelTest {
         assertEquals(summary, viewModel.uiState.value.summary)
         assertEquals(84, viewModel.uiState.value.balance)
         assertNull(viewModel.uiState.value.error)
+    }
+
+    @Test
+    fun completedPracticeTriggersOnlineFirstSummaryAndBalanceRefresh() = runBlocking {
+        val practice = FakePracticeRepository(result = AppResult.Success(summary))
+        val points = FakePointsRepository(result = AppResult.Success(50))
+        val sync = AppDataSync()
+        val viewModel = HomeViewModel(
+            practice,
+            points,
+            signedInState(),
+            scopeOverride = testScope(),
+            appDataSync = sync,
+        )
+        viewModel.loadingJob?.join()
+        practice.result = AppResult.Success(summary.copy(balance = 77, firstAnsweredCount = 9))
+        points.result = AppResult.Success(77)
+
+        sync.recordPracticeChanged(balance = 77)
+        viewModel.loadingJob?.join()
+
+        assertEquals(2, practice.calls)
+        assertEquals(2, points.calls)
+        assertEquals(9, viewModel.uiState.value.summary?.firstAnsweredCount)
+        assertEquals(77, viewModel.uiState.value.balance)
     }
 
     private class FakePracticeRepository(

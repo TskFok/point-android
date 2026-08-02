@@ -1,6 +1,7 @@
 package com.pointquest.android.feature.profile
 
 import com.pointquest.android.core.auth.ActiveSession
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
@@ -51,6 +52,22 @@ class ProfileViewModelTest {
         first!!.join()
         assertFalse(viewModel.uiState.value.loggingOut)
         assertFalse(viewModel.uiState.value.showLogoutConfirmation)
+    }
+
+    @Test
+    fun answerOrRedeemBalanceImmediatelyUpdatesExistingProfileState() {
+        val sessionState = SessionState().apply { publish(activeSession("student", 42, 1)) }
+        val sync = AppDataSync()
+        val viewModel = ProfileViewModel(
+            FakeAuthRepository(),
+            sessionState,
+            scopeOverride = testScope(),
+            appDataSync = sync,
+        )
+
+        sync.recordOrderCreated(balance = 17)
+
+        assertEquals(17, viewModel.uiState.value.user?.pointsBalance)
     }
 
     private class FakeAuthRepository(

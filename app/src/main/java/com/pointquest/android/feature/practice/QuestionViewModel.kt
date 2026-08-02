@@ -3,6 +3,7 @@ package com.pointquest.android.feature.practice
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.app.PracticeMode
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.UiErrorMapper
@@ -26,6 +27,7 @@ class QuestionViewModel(
     private val draftStore: PracticeDraftSource?,
     private val questionId: String?,
     private val scopeOverride: CoroutineScope? = null,
+    private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(QuestionUiState(mode = mode))
     private val eventChannel = Channel<QuestionEvent>(Channel.BUFFERED)
@@ -139,6 +141,7 @@ class QuestionViewModel(
             ) return@launch
             when (result) {
                 is AppResult.Success -> {
+                    appDataSync?.recordPracticeChanged(result.value.balance)
                     mutableUiState.value = mutableUiState.value.copy(
                         submitting = false,
                         submitted = true,
@@ -156,10 +159,12 @@ class QuestionViewModel(
     private suspend fun handleSubmitFailure(questionId: String, result: AppResult.Failure) {
         when {
             mode == PracticeMode.FIRST && result.error.code == QUESTION_ALREADY_ANSWERED -> {
+                appDataSync?.recordPracticeChanged()
                 mutableUiState.value = mutableUiState.value.copy(submitting = false)
                 loadFirstQuestion()
             }
             mode == PracticeMode.WRONG && result.error.code == QUESTION_ALREADY_MASTERED -> {
+                appDataSync?.recordPracticeChanged()
                 mutableUiState.value = mutableUiState.value.copy(submitting = false)
                 eventChannel.send(QuestionEvent.WrongMastered(questionId, returnToList = true))
             }

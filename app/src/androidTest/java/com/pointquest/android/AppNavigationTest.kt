@@ -3,8 +3,14 @@ package com.pointquest.android
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.assertTextContains
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.pointquest.android.app.AppRoute
 import com.pointquest.android.core.auth.SessionStatus
 import org.junit.Rule
 import org.junit.Test
@@ -18,24 +24,54 @@ class AppNavigationTest {
     @Test
     fun signedOutRegisterLoginAndBottomNavigationFlow() {
         val session = FakeAppSession(SessionStatus.SignedOut)
+        val dependencies = FakeAppDependencies(onLogin = session::signIn)
+        lateinit var navController: NavHostController
         composeRule.setContent {
-            AppNavigationTestShell(session)
+            navController = rememberNavController()
+            AppNavigationTestShell(
+                session = session,
+                navController = navController,
+                dependencies = dependencies,
+            )
         }
 
         composeRule.onNodeWithText("欢迎回来").assertIsDisplayed()
         composeRule.onNodeWithText("还没有账号？注册账号").performClick()
         composeRule.onNodeWithText("创建学生账号").assertIsDisplayed()
-
-        composeRule.runOnUiThread { session.signIn(testStudent()) }
-        composeRule.onNodeWithText("首页功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithTag("register_username").performTextInput("new_student")
+        composeRule.onNodeWithTag("register_password").performTextInput("Student1234")
+        composeRule.onNodeWithTag("register_confirm_password").performTextInput("Student1234")
+        composeRule.onNodeWithTag("register_submit").performClick()
+        composeRule.onNodeWithText("注册成功，请登录").assertIsDisplayed()
+        composeRule.onNodeWithTag("login_username").assertTextContains("new_student")
+        composeRule.onNodeWithTag("login_password").performTextInput("Student1234")
+        composeRule.onNodeWithTag("login_submit").performClick()
+        composeRule.onNodeWithText("练习进度").assertIsDisplayed()
 
         composeRule.onNodeWithText("练习").performClick()
-        composeRule.onNodeWithText("练习功能即将接入").assertIsDisplayed()
-        composeRule.onNodeWithText("商店").performClick()
-        composeRule.onNodeWithText("商店功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithText("首次答题").assertIsDisplayed()
+        composeRule.onNodeWithText("首次答题").performClick()
+        composeRule.onNodeWithText("1 + 1 等于几？").assertIsDisplayed()
+        composeRule.onNodeWithTag("question_option_option-2").performClick()
+        composeRule.onNodeWithTag("question_submit").performClick()
+        composeRule.onNodeWithText("回答正确").assertIsDisplayed()
+
+        composeRule.runOnUiThread { navController.navigate(AppRoute.Shop) }
+        composeRule.onNodeWithText("测试笔记本").assertIsDisplayed()
+        composeRule.onNodeWithTag("product_product-1").performClick()
+        composeRule.onNodeWithTag("product_redeem").performClick()
+        composeRule.onNodeWithTag("product_redeem_confirm").performClick()
+        composeRule.onNodeWithText("订单详情").assertIsDisplayed()
+        composeRule.onNodeWithText("订单号：TEST-ORDER-1").assertIsDisplayed()
+
+        composeRule.runOnUiThread { navController.navigate(AppRoute.Shop) }
+        composeRule.onNodeWithText("搜索商品").assertIsDisplayed()
         composeRule.onNodeWithText("我的").performClick()
-        composeRule.onNodeWithText("个人中心功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithText("学生").assertIsDisplayed()
+        composeRule.onNodeWithText("积分明细").performClick()
+        composeRule.onNodeWithText("当前积分").assertIsDisplayed()
+        composeRule.onNodeWithText("返回").performClick()
         composeRule.onNodeWithText("首页").performClick()
-        composeRule.onNodeWithText("首页功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithText("练习进度").assertIsDisplayed()
     }
 }

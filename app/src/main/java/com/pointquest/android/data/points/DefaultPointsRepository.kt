@@ -18,7 +18,7 @@ class DefaultPointsRepository(
         read { gateway.pointLedger(page, PAGE_SIZE) }
 
     private suspend fun <T> read(operation: suspend () -> AppResult<T>): AppResult<T> =
-        retry.executeRead { authorized.execute(operation) }
+        authorized.executeOperation { retry.executeRead { execute(operation) } }
 
     private companion object {
         const val PAGE_SIZE = 20

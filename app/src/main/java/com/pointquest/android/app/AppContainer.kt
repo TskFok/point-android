@@ -1,6 +1,7 @@
 package com.pointquest.android.app
 
 import android.content.Context
+import coil3.ImageLoader
 import com.pointquest.android.BuildConfig
 import com.pointquest.android.core.auth.RefreshCoordinator
 import com.pointquest.android.core.auth.SecureSessionStore
@@ -30,13 +31,13 @@ class AppContainer(
     context: Context,
     apiBaseUrl: String = BuildConfig.API_BASE_URL,
     imageBaseUrl: String = BuildConfig.IMAGE_BASE_URL,
-) {
+) : AppDependencies {
     private val applicationContext = context.applicationContext
 
     private val moshi: Moshi = Moshi.Builder()
         .addLast(KotlinJsonAdapterFactory())
         .build()
-    val sessionState = SessionState()
+    override val sessionState = SessionState()
     private val sessionStore = SecureSessionStore(applicationContext, moshi = moshi)
     private val sessionManager = SessionManager(sessionStore, sessionState)
 
@@ -46,33 +47,36 @@ class AppContainer(
     private val refreshCoordinator = RefreshCoordinator(publicAuthGateway, sessionManager, sessionState)
     private val authorizedCallExecutor = AuthorizedCallExecutor(sessionState, refreshCoordinator)
     private val retryExecutor = RetryExecutor()
+    override val appDataSync = AppDataSync()
 
-    val authRepository: AuthRepository = DefaultAuthRepository(
+    val imageLoader: ImageLoader = createProductImageLoader(applicationContext, apiClients.publicHttpClient)
+
+    override val authRepository: AuthRepository = DefaultAuthRepository(
         publicAuthGateway,
         sessionManager,
         sessionState,
         refreshCoordinator,
     )
-    val practiceRepository: PracticeRepository = DefaultPracticeRepository(
+    override val practiceRepository: PracticeRepository = DefaultPracticeRepository(
         studentGateway,
         authorizedCallExecutor,
         retryExecutor,
     )
-    val practiceDraftStore = PracticeDraftStore()
-    val pointsRepository: PointsRepository = DefaultPointsRepository(
+    override val practiceDraftStore = PracticeDraftStore()
+    override val pointsRepository: PointsRepository = DefaultPointsRepository(
         studentGateway,
         authorizedCallExecutor,
         retryExecutor,
     )
-    val productsRepository: ProductsRepository = DefaultProductsRepository(
+    override val productsRepository: ProductsRepository = DefaultProductsRepository(
         studentGateway,
         authorizedCallExecutor,
         retryExecutor,
     )
-    val ordersRepository: OrdersRepository = DefaultOrdersRepository(
+    override val ordersRepository: OrdersRepository = DefaultOrdersRepository(
         studentGateway,
         authorizedCallExecutor,
         retryExecutor,
     )
-    val productImageUrlFactory = ProductImageUrlFactory(imageBaseUrl)
+    override val productImageUrlFactory = ProductImageUrlFactory(imageBaseUrl)
 }

@@ -1,6 +1,7 @@
 package com.pointquest.android.feature.practice
 
 import com.pointquest.android.app.PracticeMode
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PracticeSummary
@@ -100,6 +101,30 @@ class QuestionViewModelTest {
         assertTrue(state.submitted)
         assertFalse(state.selectionEnabled)
         assertEquals(answer, state.result)
+    }
+
+    @Test
+    fun successfulAnswerPublishesBalanceAndInvalidatesHomeSummary() = runBlocking {
+        val sync = AppDataSync()
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(successQuestion("q1")),
+            firstAnswerResults = arrayDequeOf(AppResult.Success(sampleAnswer(true, "o2"))),
+        )
+        val viewModel = QuestionViewModel(
+            repository = repository,
+            mode = PracticeMode.FIRST,
+            draftStore = null,
+            questionId = null,
+            scopeOverride = CoroutineScope(Job() + Dispatchers.Unconfined),
+            appDataSync = sync,
+        )
+        viewModel.loadFirstQuestion().join()
+        viewModel.selectOption("o2")
+
+        viewModel.submit()?.join()
+
+        assertEquals(45, sync.balance.value)
+        assertEquals(1L, sync.homeRefreshRevision.value)
     }
 
     @Test

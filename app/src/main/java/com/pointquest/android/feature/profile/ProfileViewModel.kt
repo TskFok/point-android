@@ -2,6 +2,7 @@ package com.pointquest.android.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStatus
 import com.pointquest.android.core.model.User
@@ -22,6 +23,7 @@ class ProfileViewModel(
     private val authRepository: AuthRepository,
     sessionState: SessionState,
     private val scopeOverride: CoroutineScope? = null,
+    private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = mutableUiState
@@ -30,8 +32,22 @@ class ProfileViewModel(
         scope.launch {
             sessionState.status.collect { status ->
                 mutableUiState.value = mutableUiState.value.copy(
-                    user = (status as? SessionStatus.SignedIn)?.user,
+                    user = (status as? SessionStatus.SignedIn)?.user?.let { user ->
+                        appDataSync?.balance?.value?.let { user.copy(pointsBalance = it) } ?: user
+                    },
                 )
+            }
+        }
+        appDataSync?.let { sync ->
+            scope.launch {
+                sync.balance.collect { balance ->
+                    val user = mutableUiState.value.user
+                    if (balance != null && user != null) {
+                        mutableUiState.value = mutableUiState.value.copy(
+                            user = user.copy(pointsBalance = balance),
+                        )
+                    }
+                }
             }
         }
     }

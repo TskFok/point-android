@@ -2,6 +2,8 @@
 
 Point Quest Android 是积分闯关平台的学生端，覆盖登录注册、首页、首次答题、错题重练、商品兑换、订单和积分明细。客户端通过 OpenAPI 生成的 Kotlin/Retrofit 接口访问服务端，不包含管理端能力。
 
+当前应用显示名为 `Point Quest`，`versionName` 为 `0.1.0`。
+
 ## 环境要求
 
 - JDK 17；Gradle 编译目标和 Kotlin JVM target 均为 17。
@@ -60,6 +62,10 @@ cd ../point-android
 # 契约
 ./gradlew openApiValidate openApiGenerate
 
+# Release 根地址、联网权限与明文流量边界的自动校验
+./gradlew verifyReleaseApiBaseUrlValidation verifyNetworkSecurityConfig \
+  -PpointApiBaseUrl=https://api.example.invalid/
+
 # Debug 与 Release JVM 单元测试
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:testReleaseUnitTest \
@@ -98,9 +104,12 @@ adb devices -l
 
 ## 网络配置
 
-- Debug：固定根地址 `http://10.0.2.2:3000/`，只在 Debug manifest/网络安全配置中允许明文流量。
-- Release：必须显式传入 `-PpointApiBaseUrl=https://api.example.invalid/`；值必须是带尾部 `/` 的有效 HTTPS 根地址，且不得包含 `/api/v1`。
+- 主清单显式声明 `android.permission.INTERNET`；`verifyNetworkSecurityConfig` 会同时检查 Debug/Release 合并清单。
+- Debug：固定根地址 `http://10.0.2.2:3000/`。默认仍禁止明文流量，只对精确主机 `10.0.2.2` 开放，不包含子域名或其他局域网地址。
+- Release：必须显式传入 `-PpointApiBaseUrl=https://api.example.invalid/`；值必须是带尾部 `/` 的纯 HTTPS 服务根 origin。子路径（包括 `/api/v1`）、用户信息、查询参数和片段都会使构建失败。
 - Release 主清单禁止明文流量；图片根地址从 Release API 根 origin 派生。
 - `example.invalid`、`api.example.invalid` 等示例域名仅作格式或构建验证，严禁用于生产。
+
+首页、个人中心和商店通过进程内失效信号同步答题/兑换结果；首页和商店收到信号后会 online-first 重新拉取。商品列表支持下拉刷新，失败时保留当前内容并给出非致命提示。
 
 认证、令牌轮换、重试、幂等、分页、错误、图片与日志规则见 [API 接入说明](docs/api-integration-notes.md)。

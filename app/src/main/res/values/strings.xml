@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">积分闯关</string>
+    <string name="app_name">Point Quest</string>
     <string name="error_forbidden">你没有权限执行此操作</string>
     <string name="error_with_request_id">%1$s\n请求 ID：%2$s</string>
     <string name="loading">正在加载</string>

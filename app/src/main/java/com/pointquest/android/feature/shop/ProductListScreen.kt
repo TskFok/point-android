@@ -14,10 +14,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
@@ -35,71 +41,95 @@ import com.pointquest.android.core.ui.components.PagedListFooter
 import com.pointquest.android.core.ui.components.PagedListFooterState
 import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointScaffold
+import com.pointquest.android.core.ui.asString
 import com.pointquest.android.data.products.ProductImageUrlFactory
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductListScreen(
     state: ProductListUiState,
     imageUrlFactory: ProductImageUrlFactory,
     onSearchChange: (String) -> Unit,
     onRetry: () -> Unit,
+    onRefresh: () -> Unit,
+    onRefreshErrorShown: () -> Unit,
     onLoadMore: () -> Unit,
     onProductClick: (Product) -> Unit,
     modifier: Modifier = Modifier,
     bottomBar: @Composable () -> Unit = {},
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val refreshError = state.refreshError?.asString()
+    LaunchedEffect(refreshError) {
+        if (refreshError != null) {
+            snackbarHostState.showSnackbar(refreshError)
+            onRefreshErrorShown()
+        }
+    }
     PointScaffold(
         title = stringResource(R.string.shop_title),
         modifier = modifier,
         bottomBar = bottomBar,
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            OutlinedTextField(
-                value = state.search,
-                onValueChange = onSearchChange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .heightIn(min = 56.dp)
-                    .testTag("product_search"),
-                label = { Text(stringResource(R.string.product_search_label)) },
-                placeholder = { Text(stringResource(R.string.product_search_hint)) },
-                singleLine = true,
-            )
-            val asyncState = when {
-                state.loading && state.items.isEmpty() -> AsyncState.Loading
-                state.error != null && state.items.isEmpty() -> AsyncState.Error(state.error)
-                state.empty -> AsyncState.Empty
-                else -> AsyncState.Content(state.items)
-            }
-            AsyncContent(
-                state = asyncState,
-                onRetry = onRetry,
-                modifier = Modifier.fillMaxSize(),
-            ) { products ->
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            Column(Modifier.fillMaxSize()) {
+                OutlinedTextField(
+                    value = state.search,
+                    onValueChange = onSearchChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .heightIn(min = 56.dp)
+                        .testTag("product_search"),
+                    label = { Text(stringResource(R.string.product_search_label)) },
+                    placeholder = { Text(stringResource(R.string.product_search_hint)) },
+                    singleLine = true,
+                )
+                val asyncState = when {
+                    state.loading && state.items.isEmpty() -> AsyncState.Loading
+                    state.error != null && state.items.isEmpty() -> AsyncState.Error(state.error)
+                    state.empty -> AsyncState.Empty
+                    else -> AsyncState.Content(state.items)
+                }
+                PullToRefreshBox(
+                    isRefreshing = state.refreshing,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.weight(1f).testTag("product_pull_refresh"),
                 ) {
-                    items(products, key = Product::id) { product ->
-                        ProductRow(product, imageUrlFactory) { onProductClick(product) }
-                    }
-                    item {
-                        when {
-                            state.loadingMore -> PagedListFooter(PagedListFooterState.Loading, onLoadMore)
-                            state.loadMoreError != null -> PagedListFooter(
-                                PagedListFooterState.Error(state.loadMoreError), onLoadMore,
-                            )
-                            state.canLoadMore -> TextButton(
-                                onClick = onLoadMore,
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("product_load_more"),
-                            ) { Text(stringResource(R.string.load_more)) }
-                            else -> PagedListFooter(PagedListFooterState.End, onLoadMore)
+                    AsyncContent(
+                        state = asyncState,
+                        onRetry = onRetry,
+                        modifier = Modifier.fillMaxSize(),
+                    ) { products ->
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(products, key = Product::id) { product ->
+                                ProductRow(product, imageUrlFactory) { onProductClick(product) }
+                            }
+                            item {
+                                when {
+                                    state.loadingMore -> PagedListFooter(PagedListFooterState.Loading, onLoadMore)
+                                    state.loadMoreError != null -> PagedListFooter(
+                                        PagedListFooterState.Error(state.loadMoreError), onLoadMore,
+                                    )
+                                    state.canLoadMore -> TextButton(
+                                        onClick = onLoadMore,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 48.dp)
+                                            .testTag("product_load_more"),
+                                    ) { Text(stringResource(R.string.load_more)) }
+                                    else -> PagedListFooter(PagedListFooterState.End, onLoadMore)
+                                }
+                            }
                         }
                     }
                 }
             }
+            SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter))
         }
     }
 }

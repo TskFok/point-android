@@ -1,6 +1,7 @@
 package com.pointquest.android.feature.shop
 
 import com.pointquest.android.R
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.model.Order
 import com.pointquest.android.core.model.OrderStatus
 import com.pointquest.android.core.model.Page
@@ -196,6 +197,41 @@ class ProductDetailViewModelTest {
         assertEquals(1, orders.redeemCalls)
         redeemResult.complete(AppResult.Success(order("o1")))
         first?.join()
+    }
+
+    @Test
+    fun redeemAndInactiveResultsSynchronizeExistingTopLevelPages() = runTest {
+        val successSync = AppDataSync()
+        val successOrders = FakeOrdersRepository().apply { enqueue(AppResult.Success(order("o1"))) }
+        val success = ProductDetailViewModel(
+            "p1",
+            FakeProductsRepository(detailResult = AppResult.Success(product())),
+            successOrders,
+            FakePointsRepository(balanceResult = AppResult.Success(20)),
+            scopeOverride = backgroundScope,
+            appDataSync = successSync,
+        )
+        success.initialize()?.join()
+        success.requestRedeemConfirmation()
+        success.confirmRedeem()?.join()
+        assertEquals(10, successSync.balance.value)
+        assertEquals(1L, successSync.homeRefreshRevision.value)
+        assertEquals(1L, successSync.shopRefreshRevision.value)
+
+        val inactiveSync = AppDataSync()
+        val inactiveOrders = FakeOrdersRepository().apply { enqueue(failure("PRODUCT_INACTIVE")) }
+        val inactive = ProductDetailViewModel(
+            "p1",
+            FakeProductsRepository(detailResult = AppResult.Success(product())),
+            inactiveOrders,
+            FakePointsRepository(balanceResult = AppResult.Success(20)),
+            scopeOverride = backgroundScope,
+            appDataSync = inactiveSync,
+        )
+        inactive.initialize()?.join()
+        inactive.requestRedeemConfirmation()
+        inactive.confirmRedeem()?.join()
+        assertTrue("p1" in inactiveSync.inactiveProductIds.value)
     }
 
     private suspend fun kotlinx.coroutines.test.TestScope.loadedViewModel(

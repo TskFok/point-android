@@ -6,22 +6,47 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.app.AppDependencies
 import com.pointquest.android.app.AppNavHost
+import com.pointquest.android.core.auth.ActiveSession
+import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStatus
+import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.Order
+import com.pointquest.android.core.model.OrderStatus
+import com.pointquest.android.core.model.Page
+import com.pointquest.android.core.model.PageMeta
+import com.pointquest.android.core.model.PointLedgerEntry
+import com.pointquest.android.core.model.PracticeSummary
+import com.pointquest.android.core.model.Product
+import com.pointquest.android.core.model.Question
+import com.pointquest.android.core.model.QuestionOption
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
+import com.pointquest.android.core.model.WrongQuestion
+import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.theme.PointQuestTheme
+import com.pointquest.android.data.auth.AuthRepository
+import com.pointquest.android.data.orders.OrdersRepository
+import com.pointquest.android.data.points.PointsRepository
+import com.pointquest.android.data.practice.PracticeRepository
+import com.pointquest.android.data.products.ProductImageUrlFactory
+import com.pointquest.android.data.products.ProductsRepository
+import com.pointquest.android.feature.practice.PracticeDraftStore
+import java.time.Instant
 
 @Composable
 internal fun AppNavigationTestShell(
     session: FakeAppSession,
     navController: NavHostController = rememberNavController(),
+    dependencies: AppDependencies = FakeAppDependencies(),
 ) {
     PointQuestTheme {
         AppNavHost(
             sessionStatus = session.status,
             navController = navController,
-            container = null,
+            container = dependencies,
         )
     }
 }
@@ -45,3 +70,104 @@ internal fun testStudent() = User(
     role = UserRole.STUDENT,
     pointsBalance = 42,
 )
+
+internal class FakeAppDependencies(
+    private val onLogin: (User) -> Unit = {},
+) : AppDependencies {
+    override val sessionState = SessionState().apply {
+        publish(
+            ActiveSession(
+                user = testStudent(),
+                accessToken = "test-access",
+                accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
+                generation = 1,
+            ),
+        )
+    }
+    override val appDataSync = AppDataSync()
+    override val practiceDraftStore = PracticeDraftStore()
+    override val productImageUrlFactory = ProductImageUrlFactory("https://images.example.invalid/")
+
+    override val authRepository: AuthRepository = object : AuthRepository {
+        override suspend fun register(username: String, password: String) =
+            AppResult.Success(testStudent().copy(username = username))
+        override suspend fun login(username: String, password: String): AppResult<User> {
+            val user = testStudent().copy(username = username)
+            onLogin(user)
+            return AppResult.Success(user)
+        }
+        override suspend fun restore() = AppResult.Success(testStudent())
+        override suspend fun logout() = Unit
+    }
+
+    override val practiceRepository: PracticeRepository = object : PracticeRepository {
+        override suspend fun summary() = AppResult.Success(
+            PracticeSummary(10, 42, 3, 1, 2, 7),
+        )
+        override suspend fun nextQuestion(excludeIds: List<String>) = AppResult.Success(question)
+        override suspend fun answerFirst(questionId: String, selectedOptionId: String) =
+            AppResult.Success(answer)
+        override suspend fun wrongQuestions(page: Int) =
+            AppResult.Success(Page<WrongQuestion>(emptyList(), PageMeta(page, 20, 0, 0)))
+        override suspend fun answerWrong(questionId: String, selectedOptionId: String) =
+            AppResult.Success(answer)
+    }
+
+    override val pointsRepository: PointsRepository = object : PointsRepository {
+        override suspend fun balance() = AppResult.Success(42)
+        override suspend fun ledger(page: Int) =
+            AppResult.Success(Page<PointLedgerEntry>(emptyList(), PageMeta(page, 20, 0, 0)))
+    }
+
+    override val productsRepository: ProductsRepository = object : ProductsRepository {
+        override suspend fun page(search: String?, page: Int) =
+            AppResult.Success(Page(listOf(product), PageMeta(page, 20, 1, 1)))
+        override suspend fun detail(id: String) = AppResult.Success(product.copy(id = id))
+    }
+
+    override val ordersRepository: OrdersRepository = object : OrdersRepository {
+        override suspend fun redeem(productId: String) = AppResult.Success(order.copy(productId = productId))
+        override suspend fun page(page: Int) =
+            AppResult.Success(Page(listOf(order), PageMeta(page, 20, 1, 1)))
+        override suspend fun detail(id: String) = AppResult.Success(order.copy(id = id))
+    }
+
+    private companion object {
+        val question = Question(
+            id = "question-1",
+            stem = "1 + 1 等于几？",
+            basePoints = 5,
+            options = listOf(
+                QuestionOption("option-1", "A", "1", 1),
+                QuestionOption("option-2", "B", "2", 2),
+            ),
+        )
+        val answer = AnswerResult(47, true, "option-2", 0, "1 + 1 = 2", 5, "option-2")
+        val product = Product(
+            id = "product-1",
+            name = "测试笔记本",
+            description = "真实商品详情分支",
+            imageKey = "invalid-test-image",
+            pointsCost = 10,
+            stock = 2,
+            isActive = true,
+            createdAt = Instant.parse("2030-01-01T00:00:00Z"),
+            updatedAt = Instant.parse("2030-01-01T00:00:00Z"),
+        )
+        val order = Order(
+            id = "order-1",
+            orderNo = "TEST-ORDER-1",
+            userId = "student-device-test",
+            productId = "product-1",
+            productNameSnapshot = "测试笔记本",
+            productImageKeySnapshot = "invalid-test-image",
+            pointsCostSnapshot = 10,
+            status = OrderStatus.PENDING_PICKUP,
+            balance = 32,
+            createdAt = Instant.parse("2030-01-01T00:00:00Z"),
+            completedAt = null,
+            cancelledAt = null,
+            updatedBy = null,
+        )
+    }
+}

@@ -3,6 +3,7 @@ package com.pointquest.android.feature.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.R
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStatus
 import com.pointquest.android.core.model.PracticeSummary
@@ -16,6 +17,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 class HomeViewModel(
@@ -23,6 +25,7 @@ class HomeViewModel(
     private val pointsRepository: PointsRepository,
     sessionState: SessionState,
     private val scopeOverride: CoroutineScope? = null,
+    private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(HomeUiState())
     private var summaryFailed = true
@@ -42,6 +45,21 @@ class HomeViewModel(
                         username = status.user.username,
                         balance = currentPreferredBalance(),
                     )
+                }
+            }
+        }
+        appDataSync?.let { sync ->
+            scope.launch {
+                sync.balance.collect { balance ->
+                    if (balance != null) {
+                        mutableUiState.value = mutableUiState.value.copy(balance = balance)
+                    }
+                }
+            }
+            scope.launch {
+                sync.homeRefreshRevision.drop(1).collect {
+                    loadingJob?.cancel()
+                    load(loadSummary = true, loadBalance = true)
                 }
             }
         }

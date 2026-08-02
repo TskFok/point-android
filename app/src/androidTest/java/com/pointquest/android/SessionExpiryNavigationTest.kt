@@ -32,18 +32,18 @@ class SessionExpiryNavigationTest {
             navController.navigate(AppRoute.Shop)
             navController.navigate(AppRoute.ProductDetail("product-1"))
         }
-        composeRule.onNodeWithText("商品详情功能即将接入").assertIsDisplayed()
+        composeRule.onNodeWithText("真实商品详情分支").assertIsDisplayed()
 
         composeRule.runOnUiThread { session.expire() }
 
         composeRule.onNodeWithText("欢迎回来").assertIsDisplayed()
-        composeRule.onNodeWithText("商品详情功能即将接入").assertDoesNotExist()
+        composeRule.onNodeWithText("真实商品详情分支").assertDoesNotExist()
 
         val activity = composeRule.activity
         composeRule.runOnUiThread {
             activity.onBackPressedDispatcher.onBackPressed()
             assertTrue(activity.isFinishing)
         }
-        composeRule.onNodeWithText("商品详情功能即将接入").assertDoesNotExist()
+        composeRule.onNodeWithText("真实商品详情分支").assertDoesNotExist()
     }
 }

@@ -31,9 +31,12 @@ class ApiClients(
 
         fun defaultApi(baseUrl: String, client: OkHttpClient): DefaultApi = ApiClient(
             baseUrl = baseUrl,
-            serializerBuilder = Serializer.moshiBuilder,
+            serializerBuilder = generatedSerializerBuilder,
             callFactory = client,
         ).createService(DefaultApi::class.java)
+
+        private val generatedSerializerBuilder = Serializer.moshiBuilder
+            .add(UnknownDefaultEnumJsonAdapterFactory)
 
         private fun secureBaseBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()
             .cookieJar(CookieJar.NO_COOKIES)

@@ -11,10 +11,12 @@ class ProductImageUrlFactoryTest {
     fun acceptsOnlyCanonicalUuidProductImageKeys() {
         val factory = ProductImageUrlFactory("http://10.0.2.2:3000/")
 
-        assertEquals(
-            "http://10.0.2.2:3000/uploads/products/550e8400-e29b-41d4-a716-446655440000.png",
-            factory.urlOrNull(key),
-        )
+        listOf("jpg", "png", "webp").forEach { extension ->
+            assertEquals(
+                "http://10.0.2.2:3000/uploads/products/550e8400-e29b-41d4-a716-446655440000.$extension",
+                factory.urlOrNull("products/550e8400-e29b-41d4-a716-446655440000.$extension"),
+            )
+        }
     }
 
     @Test
@@ -30,6 +32,9 @@ class ProductImageUrlFactoryTest {
             "products/550e8400-e29b-41d4-a716-446655440000.png#preview",
             "products/550E8400-E29B-41D4-A716-446655440000.png",
             "products/550e8400-e29b-41d4-a716-446655440000.PNG",
+            "products/550e8400-e29b-41d4-a716-446655440000.JPG",
+            "products/550e8400-e29b-41d4-a716-446655440000.WEBP",
+            "products/550e8400-e29b-41d4-a716-446655440000.gif",
             "products/550e8400-e29b-41d4-a716-446655440000.png/extra",
             "seed/products/demo.png",
             "products/550e8400-e29b-41d4-a716-44665544000.png",

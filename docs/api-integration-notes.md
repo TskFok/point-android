@@ -8,6 +8,7 @@
 - `./gradlew openApiValidate openApiGenerate` 使用固定的 OpenAPI Generator 版本生成 Kotlin、Retrofit、Moshi 客户端到 `app/build/generated/openapi`。
 - 可用 `-PpointOpenApiSpec=/absolute/path/openapi.json` 覆盖契约位置；CI 应显式使用受版本控制的文件。
 - `GeneratedPublicAuthGateway` 和 `GeneratedStudentGateway` 是生成 DTO/API 与领域模型之间的边界。Repository、ViewModel 和 UI 不得直接调用 `DefaultApi`，也不得复制服务端积分、库存、答案判定或订单规则。
+- 生成任务会为生成模型中的枚举加入 `UNKNOWN_DEFAULT_OPEN_API`，Moshi 仅对含该哨兵的生成枚举启用未知值适配。已知 wire value 保持原映射；服务端未来新增枚举值时先反序列化为哨兵，再由 Gateway 映射到领域 `UNKNOWN`，不会让整个响应解析失败。
 
 ## Bearer 认证，不使用 Cookie/CSRF
 
@@ -43,12 +44,14 @@ Access Token 只存在 `SessionState` 的进程内活动会话中。密码、Acc
 4. 只有租约 epoch 仍与当前 epoch 一致时才允许提交新令牌；登出、重新登录或其他失效动作已改变 epoch 时，迟到响应返回 `AUTH_SESSION_CHANGED`，不得覆盖新会话。
 5. 刷新返回非学生账号、失败、过期、取消后的不确定结果、网络异常或无效响应时，当前租约会失效并清理本地材料；不会盲目重试可能已经完成轮换的刷新请求。
 
-受保护调用只有一个刷新预算：
+同一次用户操作只有一个刷新预算：
 
 - 正常调用前，Access Token 剩余有效期不超过 30 秒时先刷新。
-- 若预刷新已经发生，业务调用仍返回 401，则原样返回，不做第二次刷新或重放。
+- 若预刷新已经发生，后续业务调用仍返回 401，则原样返回，不做第二次刷新或重放。
 - 若预刷新未发生，只有精确的 `401 AUTH_TOKEN_EXPIRED` 会触发一次强制刷新，并把原业务调用重放一次。
 - 其他 401（例如 `AUTH_INVALID_TOKEN`）不刷新、不重放。因此一次受保护调用最多刷新一次、业务调用最多执行两次。
+
+认证预算包住 Repository 的整个有界重试过程，而不是在每次重试时重置。一次用户操作最多刷新一次，且最多实际发送 3 次业务请求；认证重放也计入这 3 次。混合序列（例如 `401 → 刷新重放 → 503 → 外层重试 → 401`）不会获得第二次刷新，也不会突破发送上限。
 
 ## 有界重试与三类幂等写
 
@@ -72,6 +75,18 @@ Access Token 只存在 `SessionState` 的进程内活动会话中。密码、Acc
 - 搜索/筛选变化回到第 1 页。
 - 服务端返回的页码或本地请求页超出有效范围时，重新请求最接近的有效页；总页数为 0 时呈现空集合。
 - footer 加载失败保留已有数据，允许用户重试；加载更多期间禁止并发重复请求。
+- 商品列表支持用户下拉刷新。刷新第 1 页期间保留当前商品；失败只显示非致命提示，成功后用服务端最新第 1 页替换当前集合。
+
+## 跨页面数据一致性
+
+答题、兑换和商品下架结果通过 `AppDataSync` 发布进程内失效信号：
+
+- 答题或兑换响应携带的新余额会立即更新仍存活的首页/个人中心状态。
+- 答题后首页重新在线拉取练习摘要与积分余额。
+- 兑换成功后首页与商店重新在线拉取；商店以服务端商品库存/状态为准。
+- `PRODUCT_INACTIVE` 会先从当前商品列表移除对应商品，再触发商店在线刷新。
+
+这些更新是 UI 一致性优化，不是本地权威缓存；应用重启或会话恢复后仍以服务端响应为准。
 
 ## 错误结构与 UI 行为
 
@@ -98,9 +113,16 @@ Access Token 只存在 `SessionState` 的进程内活动会话中。密码、Acc
 
 ## 商品图片
 
-客户端不接受任意图片 URL。`ProductImageUrlFactory` 只接收严格的小写 `products/<UUID>.png` key，并仅在配置为无用户名、密码、查询、片段或额外路径的 HTTP(S) 根 origin 时，生成同 origin 的 `/uploads/products/<UUID>.png`。
+客户端不接受任意图片 URL。`ProductImageUrlFactory` 只接收严格的小写 `products/<UUID>.(jpg|png|webp)` key，并仅在配置为无用户名、密码、查询、片段或额外路径的 HTTP(S) 根 origin 时，生成同 origin 的 `/uploads/products/<UUID>.<扩展名>`。
 
-无效 key、无效根地址或路径解析异常均返回 `null`，UI 使用应用内占位图和文字 `contentDescription`。Release 图片 origin 从已校验的 HTTPS API 根地址派生；不得让服务端字段绕过 factory 直接交给 Coil。
+无效 key、无效根地址或路径解析异常均返回 `null`，UI 使用应用内占位图和文字 `contentDescription`。合法同源 URL 由 Coil 3 的 OkHttp 网络 fetcher 加载，并复用应用受控的公开 `OkHttpClient`；网络或解码失败才使用错误占位图。Release 图片 origin 从已校验的 HTTPS API 根地址派生；不得让服务端字段绕过 factory 直接交给 Coil。
+
+## 网络安全配置
+
+- 主清单显式声明 `android.permission.INTERNET`。
+- Debug 网络安全配置默认禁止明文，只允许精确主机 `10.0.2.2`，且不包含子域名。
+- Release 网络安全配置始终禁止明文；Release API 参数必须是带尾部 `/` 的纯 HTTPS 根 origin，不允许子路径、用户信息、查询参数或片段。
+- `./gradlew verifyReleaseApiBaseUrlValidation verifyNetworkSecurityConfig -PpointApiBaseUrl=https://api.example.invalid/` 会自动验证以上边界。
 
 ## 日志与排障
 

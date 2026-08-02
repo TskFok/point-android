@@ -1,6 +1,7 @@
 package com.pointquest.android.feature.shop
 
 import com.pointquest.android.core.model.Page
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.model.PageMeta
 import com.pointquest.android.core.model.Product
 import com.pointquest.android.core.network.AppError
@@ -137,6 +138,48 @@ class ProductListViewModelTest {
         assertEquals(listOf(null to 1, null to 2), repository.pageCalls)
         assertEquals(listOf("last"), viewModel.uiState.value.items.map(Product::id))
         assertFalse(viewModel.uiState.value.loading)
+    }
+
+    @Test
+    fun pullRefreshKeepsExistingProductsAndReportsFailureNonFatally() = runTest {
+        val refreshResult = CompletableDeferred<AppResult<Page<Product>>>()
+        val repository = FakeProductsRepository().apply {
+            enqueuePage(success(page(1, 1, product("kept"))))
+            enqueuePage(DeferredPage(refreshResult))
+        }
+        val viewModel = ProductListViewModel(repository, backgroundScope)
+        viewModel.initialize()?.join()
+
+        val refresh = viewModel.refresh()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.refreshing)
+        assertEquals(listOf("kept"), viewModel.uiState.value.items.map(Product::id))
+
+        refreshResult.complete(failure("NETWORK_ERROR"))
+        refresh?.join()
+
+        assertFalse(viewModel.uiState.value.refreshing)
+        assertEquals(listOf("kept"), viewModel.uiState.value.items.map(Product::id))
+        assertNull(viewModel.uiState.value.error)
+        assertTrue(viewModel.uiState.value.refreshError != null)
+    }
+
+    @Test
+    fun inactiveProductIsRemovedAndShopRefreshesOnline() = runTest {
+        val sync = AppDataSync()
+        val repository = FakeProductsRepository().apply {
+            enqueuePage(success(page(1, 1, product("p1"), product("p2"))))
+            enqueuePage(success(page(1, 1, product("p2"))))
+        }
+        val viewModel = ProductListViewModel(repository, backgroundScope, appDataSync = sync)
+        viewModel.initialize()?.join()
+
+        sync.recordProductInactive("p1")
+        runCurrent()
+        viewModel.refreshJob?.join()
+
+        assertEquals(listOf("p2"), viewModel.uiState.value.items.map(Product::id))
+        assertEquals(listOf(null to 1, null to 1), repository.pageCalls)
     }
 
     private sealed interface PageResponse

@@ -3,6 +3,7 @@ package com.pointquest.android.feature.shop
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.R
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.model.Product
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
@@ -28,6 +29,7 @@ class ProductDetailViewModel(
     private val ordersRepository: OrdersRepository,
     private val pointsRepository: PointsRepository,
     private val scopeOverride: CoroutineScope? = null,
+    private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ProductDetailUiState())
     private val eventChannel = Channel<ProductDetailEvent>(Channel.BUFFERED)
@@ -83,6 +85,7 @@ class ProductDetailViewModel(
         return scope.launch {
             when (val result = ordersRepository.redeem(productId)) {
                 is AppResult.Success -> {
+                    appDataSync?.recordOrderCreated(result.value.balance)
                     val product = mutableUiState.value.product
                     mutableUiState.value = mutableUiState.value.copy(
                         product = product?.copy(stock = (product.stock - 1).coerceAtLeast(0)),
@@ -157,6 +160,7 @@ class ProductDetailViewModel(
                 message = UiText.Resource(R.string.product_insufficient_points),
             )
             PRODUCT_INACTIVE -> {
+                appDataSync?.recordProductInactive(productId)
                 mutableUiState.value = mutableUiState.value.copy(
                     product = mutableUiState.value.product?.copy(isActive = false),
                     redeeming = false,

@@ -4,7 +4,9 @@ import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CancellationException
 import java.io.IOException
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.BufferedSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
 import org.junit.Test
@@ -50,6 +52,26 @@ class ApiErrorParserTest {
 
         assertEquals("HTTP_ERROR", error.code)
         assertEquals(400, error.httpStatus)
+    }
+
+    @Test
+    fun parserNeverSwallowsJvmErrors() {
+        val expected = AssertionError("fatal parser failure")
+        val response = Response.error<Unit>(
+            500,
+            object : ResponseBody() {
+                override fun contentType() = "application/json".toMediaType()
+                override fun contentLength() = -1L
+                override fun source(): BufferedSource = throw expected
+            },
+        )
+
+        try {
+            ApiErrorParser(Moshi.Builder().build()).parse(response)
+            fail("JVM Error must escape API error parsing")
+        } catch (actual: AssertionError) {
+            assertEquals(expected, actual)
+        }
     }
 
     @Test

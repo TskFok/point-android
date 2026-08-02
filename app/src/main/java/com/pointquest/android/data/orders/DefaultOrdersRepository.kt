@@ -13,8 +13,10 @@ class DefaultOrdersRepository(
     private val retry: RetryExecutor,
 ) : OrdersRepository {
     override suspend fun redeem(productId: String): AppResult<Order> =
-        retry.executeIdempotent(RedeemPayload(productId)) { frozen ->
-            authorized.execute { gateway.createOrder(frozen.payload.productId, frozen.key) }
+        authorized.executeOperation {
+            retry.executeIdempotent(RedeemPayload(productId)) { frozen ->
+                execute { gateway.createOrder(frozen.payload.productId, frozen.key) }
+            }
         }
 
     override suspend fun page(page: Int): AppResult<Page<Order>> =
@@ -23,7 +25,7 @@ class DefaultOrdersRepository(
     override suspend fun detail(id: String): AppResult<Order> = read { gateway.order(id) }
 
     private suspend fun <T> read(operation: suspend () -> AppResult<T>): AppResult<T> =
-        retry.executeRead { authorized.execute(operation) }
+        authorized.executeOperation { retry.executeRead { execute(operation) } }
 
     private data class RedeemPayload(val productId: String)
 

@@ -82,6 +82,39 @@ class PracticeRepositoryTest {
     }
 
     @Test
+    fun mixedRetrySequenceSharesOneAuthRecoveryBudgetAcrossTheWholeUserOperation() = runBlocking {
+        val authGateway = FakeAuthGateway()
+        val gateway = FakeStudentGateway().apply {
+            answerFirstResults += failure(401, "AUTH_TOKEN_EXPIRED")
+            answerFirstResults += failure(503, "SERVICE_UNAVAILABLE")
+            answerFirstResults += failure(401, "AUTH_TOKEN_EXPIRED")
+        }
+
+        val result = repository(gateway, authGateway).answerFirst("q1", "o2")
+
+        assertEquals("AUTH_TOKEN_EXPIRED", (result as AppResult.Failure).error.code)
+        assertEquals(1, authGateway.refreshCalls)
+        assertEquals(3, gateway.firstAnswerCalls.size)
+        assertEquals(1, gateway.firstAnswerCalls.map { it.key }.distinct().size)
+    }
+
+    @Test
+    fun authReplayCountsTowardTheThreeBusinessSendLimit() = runBlocking {
+        val authGateway = FakeAuthGateway()
+        val gateway = FakeStudentGateway().apply {
+            answerFirstResults += failure(503, "SERVICE_UNAVAILABLE")
+            answerFirstResults += failure(401, "AUTH_TOKEN_EXPIRED")
+            answerFirstResults += failure(503, "SERVICE_UNAVAILABLE")
+        }
+
+        val result = repository(gateway, authGateway).answerFirst("q1", "o2")
+
+        assertEquals("SERVICE_UNAVAILABLE", (result as AppResult.Failure).error.code)
+        assertEquals(1, authGateway.refreshCalls)
+        assertEquals(3, gateway.firstAnswerCalls.size)
+    }
+
+    @Test
     fun nextQuestionTreatsInputAsOldestToNewestAndKeepsMostRecentFiftyDistinctIds() = runBlocking {
         val gateway = FakeStudentGateway()
         val ids = (1..52).map { "q$it" } + listOf("q2", "q51")

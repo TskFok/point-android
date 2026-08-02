@@ -73,7 +73,7 @@ fun AppNavHost(
     sessionStatus: SessionStatus,
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
-    container: AppContainer? = null,
+    container: AppDependencies? = null,
 ) {
     val resolver = RootDestinationResolver()
     val startDestination = resolver.resolve(sessionStatus)
@@ -189,6 +189,7 @@ fun AppNavHost(
                             container.practiceRepository,
                             container.pointsRepository,
                             container.sessionState,
+                            appDataSync = container.appDataSync,
                         )
                     }
                 }
@@ -222,7 +223,10 @@ fun AppNavHost(
             } else {
                 val factory = remember(container.productsRepository) {
                     ViewModelFactory<ProductListViewModel> {
-                        ProductListViewModel(container.productsRepository)
+                        ProductListViewModel(
+                            container.productsRepository,
+                            appDataSync = container.appDataSync,
+                        )
                     }
                 }
                 val productListViewModel: ProductListViewModel = viewModel(factory = factory)
@@ -233,6 +237,8 @@ fun AppNavHost(
                     imageUrlFactory = container.productImageUrlFactory,
                     onSearchChange = productListViewModel::updateSearch,
                     onRetry = { productListViewModel.retry() },
+                    onRefresh = { productListViewModel.refresh() },
+                    onRefreshErrorShown = productListViewModel::clearRefreshError,
                     onLoadMore = { productListViewModel.loadMore() },
                     onProductClick = { product ->
                         navController.navigate(AppRoute.ProductDetail(product.id))
@@ -247,7 +253,11 @@ fun AppNavHost(
             } else {
                 val factory = remember(container) {
                     ViewModelFactory<ProfileViewModel> {
-                        ProfileViewModel(container.authRepository, container.sessionState)
+                        ProfileViewModel(
+                            container.authRepository,
+                            container.sessionState,
+                            appDataSync = container.appDataSync,
+                        )
                     }
                 }
                 val profileViewModel: ProfileViewModel = viewModel(factory = factory)
@@ -280,6 +290,7 @@ fun AppNavHost(
                             mode = route.mode,
                             draftStore = container.practiceDraftStore,
                             questionId = route.questionId,
+                            appDataSync = container.appDataSync,
                         )
                     }
                 }
@@ -402,6 +413,7 @@ fun AppNavHost(
                             container.productsRepository,
                             container.ordersRepository,
                             container.pointsRepository,
+                            appDataSync = container.appDataSync,
                         )
                     }
                 }

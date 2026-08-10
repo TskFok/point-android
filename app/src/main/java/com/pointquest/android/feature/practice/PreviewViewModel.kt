@@ -70,7 +70,7 @@ class PreviewViewModel(
     fun selectOption(optionId: String) {
         val state = mutableUiState.value
         val item = state.currentItem ?: return
-        if (state.phase != PreviewPhase.QUIZ || state.submitting || item.answered) return
+        if (state.phase != PreviewPhase.QUIZ || state.submitting || item.answered || item.submissionOptionId != null) return
         if (item.question.options.none { it.id == optionId }) return
         updateCurrentItem(state) { it.copy(selectedOptionId = optionId, submitError = null) }
     }
@@ -82,9 +82,12 @@ class PreviewViewModel(
         if (state.phase != PreviewPhase.QUIZ || state.submitting || item.answered || submitJob?.isActive == true) {
             return null
         }
-        updateCurrentItem(state.copy(submitting = true)) { it.copy(submitError = null) }
+        val submissionOptionId = item.submissionOptionId ?: selectedOptionId
+        updateCurrentItem(state.copy(submitting = true)) {
+            it.copy(submissionOptionId = submissionOptionId, submitError = null)
+        }
         return scope.launch {
-            when (val result = repository.answerFirst(item.question.id, selectedOptionId, item.submissionKey)) {
+            when (val result = repository.answerFirst(item.question.id, submissionOptionId, item.submissionKey)) {
                 is AppResult.Success -> {
                     val after = updateCurrentItem(mutableUiState.value.copy(submitting = false)) {
                         it.copy(result = result.value, submitError = null)

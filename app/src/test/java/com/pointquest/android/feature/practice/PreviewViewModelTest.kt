@@ -111,6 +111,33 @@ class PreviewViewModelTest {
     }
 
     @Test
+    fun failedSubmitFreezesPayloadSoRetryCannotReuseKeyWithChangedOption() = runTest {
+        val repository = PreviewTestRepository(
+            previewResult = AppResult.Success(listOf(question("q1"))),
+            answerFirstResults = arrayDequeOf(
+                AppResult.Failure(AppError(null, "NETWORK_ERROR", "offline", null)),
+                AppResult.Success(answer(correct = false, selectedOptionId = "o1", pointsAwarded = 0)),
+            ),
+        )
+        val viewModel = PreviewViewModel(
+            repository,
+            DefaultLearnerLanguageStore(MemoryLearnerLanguagePersistence()),
+            testScope(),
+        )
+        viewModel.startPreview()?.join()
+        viewModel.selectOption("o1")
+        viewModel.submitCurrent()?.join()
+        val key = repository.answerFirstCalls.single().key
+
+        viewModel.selectOption("o2")
+        viewModel.retrySubmit()?.join()
+
+        assertEquals("o1", viewModel.uiState.value.items.single().selectedOptionId)
+        assertEquals(listOf("o1", "o1"), repository.answerFirstCalls.map { it.optionId })
+        assertEquals(listOf(key, key), repository.answerFirstCalls.map { it.key })
+    }
+
+    @Test
     fun alreadyAnsweredItemCannotBeSubmittedAgainAfterNavigatingBack() = runTest {
         val repository = PreviewTestRepository(
             previewResult = AppResult.Success(listOf(question("q1"), question("q2"), question("q3"))),

@@ -13,6 +13,7 @@ enum class PreviewPhase {
 data class PreviewItem(
     val question: Question,
     val selectedOptionId: String? = null,
+    val submissionOptionId: String? = null,
     val submissionKey: String,
     val result: AnswerResult? = null,
     val submitError: UiText? = null,

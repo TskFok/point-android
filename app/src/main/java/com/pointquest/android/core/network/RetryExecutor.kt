@@ -18,9 +18,10 @@ class RetryExecutor(
 
     suspend fun <P, T> executeIdempotent(
         payload: P,
+        key: String? = null,
         operation: suspend (IdempotentOperation<P>) -> AppResult<T>,
     ): AppResult<T> {
-        val idempotentOperation = IdempotentOperation(idempotencyKeyFactory.create(), payload)
+        val idempotentOperation = IdempotentOperation(key ?: idempotencyKeyFactory.create(), payload)
         return execute({ operation(idempotentOperation) }, ::isIdempotentRetryable)
     }
 

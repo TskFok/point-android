@@ -4,12 +4,17 @@ import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.generated.api.DefaultApi
 import com.pointquest.android.generated.infrastructure.ApiClient
 import com.pointquest.android.generated.infrastructure.Serializer
+import java.lang.reflect.Type
 import java.util.concurrent.TimeUnit
 import okhttp3.CookieJar
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import retrofit2.Converter
+import retrofit2.Retrofit
+import retrofit2.converter.moshi.MoshiConverterFactory
+import retrofit2.converter.scalars.ScalarsConverterFactory
 
 class ApiClients(
     baseUrl: String,
@@ -39,6 +44,11 @@ class ApiClients(
             baseUrl = baseUrl,
             serializerBuilder = generatedSerializerBuilder,
             callFactory = client,
+            converterFactories = listOf(
+                GeneratedEnumQueryConverterFactory,
+                ScalarsConverterFactory.create(),
+                MoshiConverterFactory.create(generatedSerializerBuilder.build()),
+            ),
         ).createService(DefaultApi::class.java)
 
         private val generatedSerializerBuilder = Serializer.moshiBuilder
@@ -50,6 +60,23 @@ class ApiClients(
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
             .callTimeout(30, TimeUnit.SECONDS)
+    }
+}
+
+private object GeneratedEnumQueryConverterFactory : Converter.Factory() {
+    override fun stringConverter(
+        type: Type,
+        annotations: Array<Annotation>,
+        retrofit: Retrofit,
+    ): Converter<*, String>? {
+        val rawType = getRawType(type)
+        if (!rawType.isEnum || !rawType.name.startsWith("com.pointquest.android.generated.")) {
+            return null
+        }
+        val valueField = rawType.declaredFields.firstOrNull { it.name == "value" && it.type == String::class.java }
+            ?: return null
+        valueField.isAccessible = true
+        return Converter<Any, String> { value -> valueField.get(value) as String }
     }
 }
 

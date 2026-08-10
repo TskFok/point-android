@@ -33,6 +33,24 @@ class RetryExecutorTest {
     }
 
     @Test
+    fun executeIdempotentUsesProvidedKeyForEveryAttempt() = runBlocking {
+        val executor = RetryExecutor(
+            delayProvider = RecordingDelayProvider(),
+            jitterSource = RecordingJitterSource(0, 0),
+            idempotencyKeyFactory = IdempotencyKeyFactory { "generated-key" },
+        )
+        val seenKeys = mutableListOf<String>()
+
+        val result = executor.executeIdempotent("payload", key = "fixed") { operation ->
+            seenKeys += operation.key
+            if (seenKeys.size < 3) failure(code = "NETWORK_ERROR") else AppResult.Success("ok")
+        }
+
+        assertEquals("ok", (result as AppResult.Success).value)
+        assertEquals(listOf("fixed", "fixed", "fixed"), seenKeys)
+    }
+
+    @Test
     fun readRetriesOnlyNetworkErrorsAndFiveHundreds() = runBlocking {
         val delayProvider = RecordingDelayProvider()
         val executor = RetryExecutor(

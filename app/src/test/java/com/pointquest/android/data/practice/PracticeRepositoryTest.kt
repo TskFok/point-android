@@ -6,6 +6,7 @@ import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStore
 import com.pointquest.android.core.auth.StoredRefreshSession
 import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.Order
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PageMeta
@@ -52,6 +53,20 @@ class PracticeRepositoryTest {
         assertEquals(1, gateway.firstAnswerCalls.map { it.key }.distinct().size)
         UUID.fromString(gateway.firstAnswerCalls.singleKey())
         assertTrue(gateway.firstAnswerCalls.all { it.questionId == "q1" && it.optionId == "o2" })
+    }
+
+    @Test
+    fun firstAnswerReusesProvidedIdempotencyKeyAcrossRetry() = runBlocking {
+        val gateway = FakeStudentGateway().apply {
+            answerFirstResults += failure(null, "NETWORK_ERROR")
+            answerFirstResults += AppResult.Success(answer)
+        }
+        val repository = repository(gateway)
+
+        val result = repository.answerFirst("q1", "o1", idempotencyKey = "answer-key")
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(listOf("answer-key", "answer-key"), gateway.firstAnswerCalls.map { it.key })
     }
 
     @Test
@@ -200,23 +215,42 @@ class PracticeRepositoryTest {
 
         var randomResult: AppResult<Question> = AppResult.Success(question)
         var randomExcludeIds: List<String>? = null
+        var randomLanguage: LearnerLanguage? = null
+        var previewRequest: Pair<Int, LearnerLanguage>? = null
         var wrongPage: Pair<Int, Int>? = null
+        var wrongLanguage: LearnerLanguage? = null
         val firstAnswerCalls = mutableListOf<AnswerCall>()
         val wrongAnswerCalls = mutableListOf<AnswerCall>()
         val answerFirstResults = ArrayDeque<AppResult<AnswerResult>>()
         val answerWrongResults = ArrayDeque<AppResult<AnswerResult>>()
 
-        override suspend fun practiceSummary() = AppResult.Success(summary)
-        override suspend fun randomQuestion(excludeIds: List<String>): AppResult<Question> {
+        override suspend fun practiceSummary(language: LearnerLanguage) = AppResult.Success(summary)
+        override suspend fun randomQuestion(
+            excludeIds: List<String>,
+            language: LearnerLanguage,
+        ): AppResult<Question> {
             randomExcludeIds = excludeIds
+            randomLanguage = language
             return randomResult
+        }
+        override suspend fun previewQuestions(
+            count: Int,
+            language: LearnerLanguage,
+        ): AppResult<List<Question>> {
+            previewRequest = count to language
+            return AppResult.Success(listOf(question))
         }
         override suspend fun answerFirst(questionId: String, optionId: String, key: String): AppResult<AnswerResult> {
             firstAnswerCalls += AnswerCall(questionId, optionId, key)
             return answerFirstResults.removeFirstOrNull() ?: AppResult.Success(answer)
         }
-        override suspend fun wrongQuestions(page: Int, pageSize: Int): AppResult<Page<WrongQuestion>> {
+        override suspend fun wrongQuestions(
+            page: Int,
+            pageSize: Int,
+            language: LearnerLanguage,
+        ): AppResult<Page<WrongQuestion>> {
             wrongPage = page to pageSize
+            wrongLanguage = language
             return AppResult.Success(Page(emptyList(), PageMeta(page, pageSize, 0, 0)))
         }
         override suspend fun answerWrong(questionId: String, optionId: String, key: String): AppResult<AnswerResult> {
@@ -263,7 +297,7 @@ class PracticeRepositoryTest {
             User("u1", "student", UserRole.STUDENT, 42),
         )
 
-        fun failure(status: Int, code: String) = AppResult.Failure(AppError(status, code, code, null))
+        fun failure(status: Int? = null, code: String) = AppResult.Failure(AppError(status, code, code, null))
 
         fun List<FakeStudentGateway.AnswerCall>.singleKey() = first().key
     }

@@ -5,6 +5,7 @@ import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStore
 import com.pointquest.android.core.auth.StoredRefreshSession
 import com.pointquest.android.core.model.PointLedgerType
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.OrderStatus
 import com.pointquest.android.core.model.TokenBundle
 import com.pointquest.android.core.model.User
@@ -76,6 +77,45 @@ class GeneratedStudentGatewayTest {
         assertRequest("/api/v1/practice/summary")
         assertRequest("/api/v1/practice/random?excludeIds=q%201%2Cq2")
         assertRequest("/api/v1/practice/wrong-questions?page=3&pageSize=20")
+    }
+
+    @Test
+    fun practiceReadsSendApiSpecificLanguageQueryParameters() = runBlocking {
+        enqueue(summaryJson)
+        enqueue(questionJson)
+        enqueue(previewQuestionsJson)
+        enqueue(wrongQuestionsJson)
+
+        gateway.practiceSummary(LearnerLanguage.EN)
+        gateway.randomQuestion(listOf("q1"), LearnerLanguage.JA)
+        gateway.previewQuestions(5, LearnerLanguage.IT)
+        gateway.wrongQuestions(2, 20, LearnerLanguage.FR)
+
+        assertRequest("/api/v1/practice/summary?langCode=en")
+        assertRequest("/api/v1/practice/random?excludeIds=q1&langCode=ja")
+        assertRequest("/api/v1/practice/preview?count=5&langCode=it")
+        assertRequest("/api/v1/practice/wrong-questions?page=2&pageSize=20&langCode=fr")
+    }
+
+    @Test
+    fun allLanguageOmitsLangCodeAndPreviewQuestionsMapToDomainInServerOrder() = runBlocking {
+        enqueue(summaryJson)
+        enqueue(questionJson)
+        enqueue(previewQuestionsJson)
+        enqueue(wrongQuestionsJson)
+
+        gateway.practiceSummary(LearnerLanguage.ALL)
+        gateway.randomQuestion(emptyList(), LearnerLanguage.ALL)
+        val preview = (gateway.previewQuestions(2, LearnerLanguage.ALL) as AppResult.Success).value
+        gateway.wrongQuestions(1, 20, LearnerLanguage.ALL)
+
+        assertEquals(listOf("p1", "p2"), preview.map { it.id })
+        assertEquals(listOf("A", "B"), preview.first().options.map { it.label })
+        assertEquals(listOf("B", "C"), preview.last().options.map { it.label })
+        assertRequest("/api/v1/practice/summary")
+        assertRequest("/api/v1/practice/random")
+        assertRequest("/api/v1/practice/preview?count=2")
+        assertRequest("/api/v1/practice/wrong-questions?page=1&pageSize=20")
     }
 
     @Test
@@ -226,6 +266,7 @@ class GeneratedStudentGatewayTest {
     private companion object {
         val summaryJson = """{"activeTotal":10,"balance":42,"firstAnsweredCount":2,"masteredWrongCount":1,"pendingWrongCount":3,"unansweredCount":5}"""
         val questionJson = """{"basePoints":5,"id":"q1","options":[{"content":"2","id":"o2","label":"B","position":2},{"content":"1","id":"o1","label":"A","position":1}],"stem":"1+1?"}"""
+        val previewQuestionsJson = """{"data":[{"basePoints":5,"correctOptionId":"o1","explanation":"first","id":"p1","langCode":"it","options":[{"content":"1","id":"o1","label":"A","position":1},{"content":"2","id":"o2","label":"B","position":2}],"stem":"first?"},{"basePoints":10,"correctOptionId":"o3","explanation":"second","id":"p2","langCode":"fr","options":[{"content":"3","id":"o3","label":"C","position":2},{"content":"2","id":"o2","label":"B","position":1}],"stem":"second?"}]}"""
         val answerJson = """{"balance":47,"correct":true,"correctOptionId":"o2","errorCount":0,"explanation":"yes","pointsAwarded":5,"selectedOptionId":"o2"}"""
         val wrongQuestionsJson = """{"data":[{"errorCount":2,"firstAnsweredAt":"2030-01-02T03:04:05Z","masteredAt":null,"question":$questionJson}],"meta":{"page":3,"pageSize":20,"total":1,"totalPages":1}}"""
         val ledgerJson = """{"data":[{"answerAttemptId":"a1","balanceAfter":42,"createdAt":"2030-01-02T03:04:05Z","delta":5,"id":"l1","orderId":null,"type":"ANSWER_REWARD","userId":"u1"}],"meta":{"page":2,"pageSize":20,"total":1,"totalPages":1}}"""

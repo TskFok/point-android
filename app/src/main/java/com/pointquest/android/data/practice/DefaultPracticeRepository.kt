@@ -1,6 +1,7 @@
 package com.pointquest.android.data.practice
 
 import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PracticeSummary
 import com.pointquest.android.core.model.Question
@@ -15,22 +16,35 @@ class DefaultPracticeRepository(
     private val authorized: AuthorizedCallExecutor,
     private val retry: RetryExecutor,
 ) : PracticeRepository {
-    override suspend fun summary(): AppResult<PracticeSummary> = read { gateway.practiceSummary() }
+    override suspend fun summary(language: LearnerLanguage): AppResult<PracticeSummary> =
+        read { gateway.practiceSummary(language) }
 
-    override suspend fun nextQuestion(excludeIds: List<String>): AppResult<Question> {
+    override suspend fun nextQuestion(
+        excludeIds: List<String>,
+        language: LearnerLanguage,
+    ): AppResult<Question> {
         val mostRecentDistinct = excludeIds.asReversed().distinct().asReversed().takeLast(MAX_EXCLUDE_IDS)
-        return read { gateway.randomQuestion(mostRecentDistinct) }
+        return read { gateway.randomQuestion(mostRecentDistinct, language) }
     }
+
+    override suspend fun previewQuestions(
+        count: Int,
+        language: LearnerLanguage,
+    ): AppResult<List<Question>> = read { gateway.previewQuestions(count, language) }
 
     override suspend fun answerFirst(
         questionId: String,
         selectedOptionId: String,
-    ): AppResult<AnswerResult> = write(AnswerPayload(questionId, selectedOptionId)) { payload, key ->
+        idempotencyKey: String?,
+    ): AppResult<AnswerResult> = write(AnswerPayload(questionId, selectedOptionId), idempotencyKey) { payload, key ->
         gateway.answerFirst(payload.questionId, payload.selectedOptionId, key)
     }
 
-    override suspend fun wrongQuestions(page: Int): AppResult<Page<WrongQuestion>> =
-        read { gateway.wrongQuestions(page, PAGE_SIZE) }
+    override suspend fun wrongQuestions(
+        page: Int,
+        language: LearnerLanguage,
+    ): AppResult<Page<WrongQuestion>> =
+        read { gateway.wrongQuestions(page, PAGE_SIZE, language) }
 
     override suspend fun answerWrong(
         questionId: String,
@@ -44,9 +58,10 @@ class DefaultPracticeRepository(
 
     private suspend fun <T> write(
         payload: AnswerPayload,
+        key: String? = null,
         operation: suspend (AnswerPayload, String) -> AppResult<T>,
     ): AppResult<T> = authorized.executeOperation {
-        retry.executeIdempotent(payload) { frozen ->
+        retry.executeIdempotent(payload, key = key) { frozen ->
             execute { operation(frozen.payload, frozen.key) }
         }
     }

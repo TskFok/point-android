@@ -84,7 +84,7 @@ internal class FakeAppDependencies(
             ),
         )
     }
-    override val appDataSync = AppDataSync()
+    override val appDataSync = AppDataSync(sessionState)
     override val practiceDraftStore = PracticeDraftStore()
     override val productImageUrlFactory = ProductImageUrlFactory("https://images.example.invalid/")
 

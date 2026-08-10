@@ -2,11 +2,15 @@ package com.pointquest.android.feature.shop
 
 import com.pointquest.android.R
 import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.core.auth.ActiveSession
+import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.Order
 import com.pointquest.android.core.model.OrderStatus
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PointLedgerEntry
 import com.pointquest.android.core.model.Product
+import com.pointquest.android.core.model.User
+import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.UiText
@@ -201,7 +205,7 @@ class ProductDetailViewModelTest {
 
     @Test
     fun redeemAndInactiveResultsSynchronizeExistingTopLevelPages() = runTest {
-        val successSync = AppDataSync()
+        val successSync = signedInSync()
         val successOrders = FakeOrdersRepository().apply { enqueue(AppResult.Success(order("o1"))) }
         val success = ProductDetailViewModel(
             "p1",
@@ -214,11 +218,11 @@ class ProductDetailViewModelTest {
         success.initialize()?.join()
         success.requestRedeemConfirmation()
         success.confirmRedeem()?.join()
-        assertEquals(10, successSync.balance.value)
-        assertEquals(1L, successSync.homeRefreshRevision.value)
-        assertEquals(1L, successSync.shopRefreshRevision.value)
+        assertEquals(10, successSync.state.value.balance)
+        assertEquals(1L, successSync.state.value.homeRefreshRevision)
+        assertEquals(1L, successSync.state.value.shopRefreshRevision)
 
-        val inactiveSync = AppDataSync()
+        val inactiveSync = signedInSync()
         val inactiveOrders = FakeOrdersRepository().apply { enqueue(failure("PRODUCT_INACTIVE")) }
         val inactive = ProductDetailViewModel(
             "p1",
@@ -231,7 +235,7 @@ class ProductDetailViewModelTest {
         inactive.initialize()?.join()
         inactive.requestRedeemConfirmation()
         inactive.confirmRedeem()?.join()
-        assertTrue("p1" in inactiveSync.inactiveProductIds.value)
+        assertTrue("p1" in inactiveSync.state.value.inactiveProductIds)
     }
 
     private suspend fun kotlinx.coroutines.test.TestScope.loadedViewModel(
@@ -296,6 +300,20 @@ class ProductDetailViewModelTest {
     private companion object {
         fun failure(code: String, details: Map<String, Any?> = emptyMap()) =
             AppResult.Failure(AppError(409, code, "failed", null, details))
+
+        fun signedInSync(): AppDataSync {
+            val sessionState = SessionState().apply {
+                publish(
+                    ActiveSession(
+                        user = User("student-1", "student", UserRole.STUDENT, 42),
+                        accessToken = "token",
+                        accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
+                        generation = 1,
+                    ),
+                )
+            }
+            return AppDataSync(sessionState)
+        }
 
         fun product() = Product(
             "p1", "笔记本", "描述", "products/550e8400-e29b-41d4-a716-446655440000.png",

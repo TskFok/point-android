@@ -81,10 +81,12 @@ Access Token 只存在 `SessionState` 的进程内活动会话中。密码、Acc
 
 答题、兑换和商品下架结果通过 `AppDataSync` 发布进程内失效信号：
 
+- 同步状态绑定当前 `(userId, sessionGeneration)`。`SignedOut` 或新的会话 generation 发布时，余额、刷新 revision 与临时下架标记在同一快照中清空；旧会话请求的迟到结果会因会话键不匹配而被丢弃。
 - 答题或兑换响应携带的新余额会立即更新仍存活的首页/个人中心状态。
 - 答题后首页重新在线拉取练习摘要与积分余额。
 - 兑换成功后首页与商店重新在线拉取；商店以服务端商品库存/状态为准。
-- `PRODUCT_INACTIVE` 会先从当前商品列表移除对应商品，再触发商店在线刷新。
+- `PRODUCT_INACTIVE` 会先从当前商品列表移除对应商品，再触发商店在线刷新。该标记是带 shop revision 的临时 tombstone：只有在该 revision 或更高 revision 下启动的权威第 1 页请求成功后才清除；请求失败时保留，供后续重试继续过滤。
+- 初始加载、加载更多或下拉刷新在途时若收到新的 shop revision，商城会提升请求 generation、取消旧请求并以最新 revision 重启 online-first 第 1 页；即使旧请求忽略取消并迟到返回，也不能覆盖新响应。
 
 这些更新是 UI 一致性优化，不是本地权威缓存；应用重启或会话恢复后仍以服务端响应为准。
 

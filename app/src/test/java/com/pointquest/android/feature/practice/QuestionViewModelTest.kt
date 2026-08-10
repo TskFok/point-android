@@ -2,12 +2,16 @@ package com.pointquest.android.feature.practice
 
 import com.pointquest.android.app.PracticeMode
 import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.core.auth.ActiveSession
+import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PracticeSummary
 import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.model.QuestionOption
 import com.pointquest.android.core.model.WrongQuestion
+import com.pointquest.android.core.model.User
+import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.data.practice.PracticeRepository
@@ -105,7 +109,7 @@ class QuestionViewModelTest {
 
     @Test
     fun successfulAnswerPublishesBalanceAndInvalidatesHomeSummary() = runBlocking {
-        val sync = AppDataSync()
+        val sync = signedInSync()
         val repository = FakePracticeRepository(
             nextResults = loadResults(successQuestion("q1")),
             firstAnswerResults = arrayDequeOf(AppResult.Success(sampleAnswer(true, "o2"))),
@@ -123,8 +127,8 @@ class QuestionViewModelTest {
 
         viewModel.submit()?.join()
 
-        assertEquals(45, sync.balance.value)
-        assertEquals(1L, sync.homeRefreshRevision.value)
+        assertEquals(45, sync.state.value.balance)
+        assertEquals(1L, sync.state.value.homeRefreshRevision)
     }
 
     @Test
@@ -348,6 +352,20 @@ class QuestionViewModelTest {
         )
 
         fun failure(code: String) = AppResult.Failure(AppError(409, code, code, null))
+
+        fun signedInSync(): AppDataSync {
+            val sessionState = SessionState().apply {
+                publish(
+                    ActiveSession(
+                        user = User("student-1", "student", UserRole.STUDENT, 42),
+                        accessToken = "token",
+                        accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
+                        generation = 1,
+                    ),
+                )
+            }
+            return AppDataSync(sessionState)
+        }
 
         fun wrongQuestion(id: String) = WrongQuestion(
             errorCount = 2,

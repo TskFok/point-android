@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.R
 import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.app.AppDataSession
 import com.pointquest.android.core.model.Product
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
@@ -77,6 +78,7 @@ class ProductDetailViewModel(
     fun confirmRedeem(): Job? {
         val state = mutableUiState.value
         if (!state.showRedeemConfirmation || !state.canRedeem || redeemJob?.isActive == true) return null
+        val appDataSession = appDataSync?.captureSession()
         mutableUiState.value = state.copy(
             showRedeemConfirmation = false,
             redeeming = true,
@@ -85,7 +87,9 @@ class ProductDetailViewModel(
         return scope.launch {
             when (val result = ordersRepository.redeem(productId)) {
                 is AppResult.Success -> {
-                    appDataSync?.recordOrderCreated(result.value.balance)
+                    if (appDataSession != null) {
+                        appDataSync?.recordOrderCreated(appDataSession, result.value.balance)
+                    }
                     val product = mutableUiState.value.product
                     mutableUiState.value = mutableUiState.value.copy(
                         product = product?.copy(stock = (product.stock - 1).coerceAtLeast(0)),
@@ -94,7 +98,7 @@ class ProductDetailViewModel(
                     )
                     eventChannel.send(ProductDetailEvent.NavigateToOrder(result.value.id))
                 }
-                is AppResult.Failure -> applyRedeemFailure(result.error)
+                is AppResult.Failure -> applyRedeemFailure(result.error, appDataSession)
             }
         }.also { redeemJob = it }
     }
@@ -147,7 +151,10 @@ class ProductDetailViewModel(
         else -> null
     }
 
-    private suspend fun applyRedeemFailure(error: AppError) {
+    private suspend fun applyRedeemFailure(
+        error: AppError,
+        appDataSession: AppDataSession?,
+    ) {
         when (error.code) {
             OUT_OF_STOCK -> mutableUiState.value = mutableUiState.value.copy(
                 product = mutableUiState.value.product?.copy(stock = 0),
@@ -160,7 +167,9 @@ class ProductDetailViewModel(
                 message = UiText.Resource(R.string.product_insufficient_points),
             )
             PRODUCT_INACTIVE -> {
-                appDataSync?.recordProductInactive(productId)
+                if (appDataSession != null) {
+                    appDataSync?.recordProductInactive(appDataSession, productId)
+                }
                 mutableUiState.value = mutableUiState.value.copy(
                     product = mutableUiState.value.product?.copy(isActive = false),
                     redeeming = false,

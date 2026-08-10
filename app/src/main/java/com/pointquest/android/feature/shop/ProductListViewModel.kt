@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.R
 import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.app.AppDataSession
+import com.pointquest.android.app.ShopRefreshSnapshot
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.network.PageAdjustment
 import com.pointquest.android.core.network.PagedState
@@ -35,6 +37,8 @@ class ProductListViewModel(
     private var generation = 0L
     private var activeQuery: String? = null
     private var searchCollectorJob: Job? = null
+    private var observedSyncSession: AppDataSession? = null
+    private var observedShopRevision = 0L
 
     val uiState: StateFlow<ProductListUiState> = mutableUiState
 
@@ -59,17 +63,22 @@ class ProductListViewModel(
                 }
         }
         appDataSync?.let { sync ->
+            val initialSyncState = sync.state.value
+            observedSyncSession = initialSyncState.session
+            observedShopRevision = initialSyncState.shopRefreshRevision
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                sync.inactiveProductIds.collect { inactiveIds ->
-                    val state = mutableUiState.value
-                    val visible = state.items.filterNot { it.id in inactiveIds }
-                    if (visible.size != state.items.size) {
-                        mutableUiState.value = state.copy(paged = state.paged.copy(items = visible))
+                sync.state.collect { syncState ->
+                    removeInactiveProducts(syncState.inactiveProductIds)
+                    val sessionChanged = syncState.session != observedSyncSession
+                    val revisionAdvanced = !sessionChanged &&
+                        syncState.shopRefreshRevision > observedShopRevision
+                    observedSyncSession = syncState.session
+                    observedShopRevision = syncState.shopRefreshRevision
+                    when {
+                        sessionChanged -> handleSessionChanged(syncState.session)
+                        revisionAdvanced -> restartForShopRevision()
                     }
                 }
-            }
-            scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                sync.shopRefreshRevision.drop(1).collect { refresh() }
             }
         }
         startFirstPage(normalizeSearch(searchInput.value))
@@ -88,9 +97,16 @@ class ProductListViewModel(
     fun refresh(): Job? {
         val state = mutableUiState.value
         if (state.loading || state.refreshing) return null
+        return startRefresh()
+    }
+
+    private fun startRefresh(): Job {
+        val state = mutableUiState.value
         generation += 1
         val requestGeneration = generation
+        loadingJob?.cancel()
         loadMoreJob?.cancel()
+        refreshJob?.cancel()
         mutableUiState.value = state.copy(
             refreshing = true,
             loadingMore = false,
@@ -105,6 +121,7 @@ class ProductListViewModel(
                 requestGeneration = requestGeneration,
                 visited = mutableSetOf(),
                 refreshing = true,
+                shopRefreshSnapshot = appDataSync?.captureShopRefresh(),
             )
         }.also { refreshJob = it }
     }
@@ -147,7 +164,14 @@ class ProductListViewModel(
             loadMoreError = null,
         )
         return scope.launch {
-            requestPage(query, FIRST_PAGE, initial = true, requestGeneration, mutableSetOf())
+            requestPage(
+                query,
+                FIRST_PAGE,
+                initial = true,
+                requestGeneration,
+                mutableSetOf(),
+                shopRefreshSnapshot = appDataSync?.captureShopRefresh(),
+            )
         }.also { loadingJob = it }
     }
 
@@ -158,6 +182,7 @@ class ProductListViewModel(
         requestGeneration: Long,
         visited: MutableSet<Int>,
         refreshing: Boolean = false,
+        shopRefreshSnapshot: ShopRefreshSnapshot? = null,
     ) {
         if (!visited.add(page)) {
             if (requestGeneration == generation) finishWithAdjustmentError(initial, refreshing)
@@ -167,7 +192,11 @@ class ProductListViewModel(
             is AppResult.Success -> {
                 if (requestGeneration != generation) return
                 val base = mutableUiState.value.paged.copy(adjustment = null)
-                val inactiveIds = appDataSync?.inactiveProductIds?.value.orEmpty()
+                val inactiveIds = when {
+                    page == FIRST_PAGE && shopRefreshSnapshot != null ->
+                        appDataSync?.inactiveProductIdsNotCoveredBy(shopRefreshSnapshot).orEmpty()
+                    else -> appDataSync?.state?.value?.inactiveProductIds.orEmpty()
+                }
                 val visiblePage = result.value.copy(
                     items = result.value.items.filterNot { it.id in inactiveIds },
                 )
@@ -187,6 +216,7 @@ class ProductListViewModel(
                         requestGeneration,
                         visited,
                         refreshing,
+                        shopRefreshSnapshot,
                     )
                 } else {
                     mutableUiState.value = mutableUiState.value.copy(
@@ -198,6 +228,9 @@ class ProductListViewModel(
                         refreshError = null,
                         loadMoreError = null,
                     )
+                    if (page == FIRST_PAGE && shopRefreshSnapshot != null) {
+                        appDataSync?.acknowledgeShopRefresh(shopRefreshSnapshot)
+                    }
                 }
             }
             is AppResult.Failure -> {
@@ -225,6 +258,36 @@ class ProductListViewModel(
             mutableUiState.value.copy(loading = false, loadingMore = false, error = message)
         } else {
             mutableUiState.value.copy(loadingMore = false, loadMoreError = message)
+        }
+    }
+
+    private fun removeInactiveProducts(inactiveIds: Set<String>) {
+        val state = mutableUiState.value
+        val visible = state.items.filterNot { it.id in inactiveIds }
+        if (visible.size != state.items.size) {
+            mutableUiState.value = state.copy(paged = state.paged.copy(items = visible))
+        }
+    }
+
+    private fun handleSessionChanged(session: AppDataSession?) {
+        generation += 1
+        loadingJob?.cancel()
+        loadMoreJob?.cancel()
+        refreshJob?.cancel()
+        if (session == null) {
+            mutableUiState.value = ProductListUiState(search = mutableUiState.value.search)
+        } else if (mutableUiState.value.items.isEmpty()) {
+            startFirstPage(activeQuery)
+        } else {
+            startRefresh()
+        }
+    }
+
+    private fun restartForShopRevision() {
+        if (mutableUiState.value.items.isEmpty()) {
+            startFirstPage(activeQuery)
+        } else {
+            startRefresh()
         }
     }
 

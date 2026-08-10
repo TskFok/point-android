@@ -57,7 +57,7 @@ class ProfileViewModelTest {
     @Test
     fun answerOrRedeemBalanceImmediatelyUpdatesExistingProfileState() {
         val sessionState = SessionState().apply { publish(activeSession("student", 42, 1)) }
-        val sync = AppDataSync()
+        val sync = AppDataSync(sessionState)
         val viewModel = ProfileViewModel(
             FakeAuthRepository(),
             sessionState,
@@ -65,9 +65,36 @@ class ProfileViewModelTest {
             appDataSync = sync,
         )
 
-        sync.recordOrderCreated(balance = 17)
+        sync.recordOrderCreated(checkNotNull(sync.captureSession()), balance = 17)
 
         assertEquals(17, viewModel.uiState.value.user?.pointsBalance)
+    }
+
+    @Test
+    fun signedOutAndAccountSwitchRejectsOldBalanceWhileCurrentAccountUpdatesStillApply() {
+        val sessionState = SessionState().apply {
+            publish(activeSession("student-a", 42, 1, userId = "student-a-id"))
+        }
+        val sync = AppDataSync(sessionState)
+        val viewModel = ProfileViewModel(
+            FakeAuthRepository(),
+            sessionState,
+            scopeOverride = testScope(),
+            appDataSync = sync,
+        )
+        val accountASession = checkNotNull(sync.captureSession())
+        sync.recordOrderCreated(accountASession, balance = 17)
+        assertEquals(17, viewModel.uiState.value.user?.pointsBalance)
+
+        sessionState.clear()
+        sessionState.publish(activeSession("student-b", 88, 2, userId = "student-b-id"))
+        sync.recordOrderCreated(accountASession, balance = 5)
+
+        assertEquals("student-b", viewModel.uiState.value.user?.username)
+        assertEquals(88, viewModel.uiState.value.user?.pointsBalance)
+
+        sync.recordPracticeChanged(checkNotNull(sync.captureSession()), balance = 77)
+        assertEquals(77, viewModel.uiState.value.user?.pointsBalance)
     }
 
     private class FakeAuthRepository(
@@ -85,8 +112,13 @@ class ProfileViewModelTest {
 
     private companion object {
         fun testScope() = CoroutineScope(Job() + Dispatchers.Unconfined)
-        fun activeSession(username: String, points: Int, generation: Long) = ActiveSession(
-            user = User("student-1", username, UserRole.STUDENT, points),
+        fun activeSession(
+            username: String,
+            points: Int,
+            generation: Long,
+            userId: String = "student-1",
+        ) = ActiveSession(
+            user = User(userId, username, UserRole.STUDENT, points),
             accessToken = "token",
             accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
             generation = generation,

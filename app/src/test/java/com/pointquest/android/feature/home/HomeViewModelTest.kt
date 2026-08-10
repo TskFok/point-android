@@ -101,11 +101,12 @@ class HomeViewModelTest {
     fun completedPracticeTriggersOnlineFirstSummaryAndBalanceRefresh() = runBlocking {
         val practice = FakePracticeRepository(result = AppResult.Success(summary))
         val points = FakePointsRepository(result = AppResult.Success(50))
-        val sync = AppDataSync()
+        val sessionState = signedInState()
+        val sync = AppDataSync(sessionState)
         val viewModel = HomeViewModel(
             practice,
             points,
-            signedInState(),
+            sessionState,
             scopeOverride = testScope(),
             appDataSync = sync,
         )
@@ -113,7 +114,7 @@ class HomeViewModelTest {
         practice.result = AppResult.Success(summary.copy(balance = 77, firstAnsweredCount = 9))
         points.result = AppResult.Success(77)
 
-        sync.recordPracticeChanged(balance = 77)
+        sync.recordPracticeChanged(checkNotNull(sync.captureSession()), balance = 77)
         viewModel.loadingJob?.join()
 
         assertEquals(2, practice.calls)

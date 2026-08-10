@@ -17,7 +17,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class HomeViewModel(
@@ -50,17 +52,23 @@ class HomeViewModel(
         }
         appDataSync?.let { sync ->
             scope.launch {
-                sync.balance.collect { balance ->
-                    if (balance != null) {
-                        mutableUiState.value = mutableUiState.value.copy(balance = balance)
+                sync.state.collect { state ->
+                    val activeUserId = sessionState.active.value?.user?.id
+                    if (state.session?.userId == activeUserId && state.balance != null) {
+                        mutableUiState.value = mutableUiState.value.copy(balance = state.balance)
                     }
                 }
             }
             scope.launch {
-                sync.homeRefreshRevision.drop(1).collect {
-                    loadingJob?.cancel()
-                    load(loadSummary = true, loadBalance = true)
-                }
+                sync.state
+                    .map { it.session to it.homeRefreshRevision }
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .collect { (session, _) ->
+                        if (session == null) return@collect
+                        loadingJob?.cancel()
+                        load(loadSummary = true, loadBalance = true)
+                    }
             }
         }
         load(loadSummary = true, loadBalance = true)

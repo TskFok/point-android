@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 data class ProfileUiState(
@@ -30,24 +31,24 @@ class ProfileViewModel(
 
     init {
         scope.launch {
-            sessionState.status.collect { status ->
-                mutableUiState.value = mutableUiState.value.copy(
-                    user = (status as? SessionStatus.SignedIn)?.user?.let { user ->
-                        appDataSync?.balance?.value?.let { user.copy(pointsBalance = it) } ?: user
-                    },
-                )
-            }
-        }
-        appDataSync?.let { sync ->
-            scope.launch {
-                sync.balance.collect { balance ->
-                    val user = mutableUiState.value.user
-                    if (balance != null && user != null) {
+            val syncState = appDataSync?.state
+            if (syncState == null) {
+                sessionState.status.collect { status ->
+                    mutableUiState.value = mutableUiState.value.copy(
+                        user = (status as? SessionStatus.SignedIn)?.user,
+                    )
+                }
+            } else {
+                sessionState.status.combine(syncState) { status, sync -> status to sync }
+                    .collect { (status, sync) ->
+                        val user = (status as? SessionStatus.SignedIn)?.user
+                        val balance = sync.balance.takeIf { sync.session?.userId == user?.id }
                         mutableUiState.value = mutableUiState.value.copy(
-                            user = user.copy(pointsBalance = balance),
+                            user = user?.let { current ->
+                                balance?.let { current.copy(pointsBalance = it) } ?: current
+                            },
                         )
                     }
-                }
             }
         }
     }

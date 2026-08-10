@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.app.PracticeMode
 import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.app.AppDataSession
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.UiErrorMapper
@@ -129,6 +130,7 @@ class QuestionViewModel(
         val selectedOptionId = state.selectedOptionId ?: return null
         if (!state.selectionEnabled || submitJob?.isActive == true) return null
         val submissionGeneration = loadGeneration.get()
+        val appDataSession = appDataSync?.captureSession()
         mutableUiState.value = state.copy(submitting = true, error = null)
         return scope.launch {
             val result = when (mode) {
@@ -141,7 +143,9 @@ class QuestionViewModel(
             ) return@launch
             when (result) {
                 is AppResult.Success -> {
-                    appDataSync?.recordPracticeChanged(result.value.balance)
+                    if (appDataSession != null) {
+                        appDataSync?.recordPracticeChanged(appDataSession, result.value.balance)
+                    }
                     mutableUiState.value = mutableUiState.value.copy(
                         submitting = false,
                         submitted = true,
@@ -151,20 +155,24 @@ class QuestionViewModel(
                         eventChannel.send(QuestionEvent.WrongMastered(question.id, returnToList = false))
                     }
                 }
-                is AppResult.Failure -> handleSubmitFailure(question.id, result)
+                is AppResult.Failure -> handleSubmitFailure(question.id, result, appDataSession)
             }
         }.also { submitJob = it }
     }
 
-    private suspend fun handleSubmitFailure(questionId: String, result: AppResult.Failure) {
+    private suspend fun handleSubmitFailure(
+        questionId: String,
+        result: AppResult.Failure,
+        appDataSession: AppDataSession?,
+    ) {
         when {
             mode == PracticeMode.FIRST && result.error.code == QUESTION_ALREADY_ANSWERED -> {
-                appDataSync?.recordPracticeChanged()
+                if (appDataSession != null) appDataSync?.recordPracticeChanged(appDataSession)
                 mutableUiState.value = mutableUiState.value.copy(submitting = false)
                 loadFirstQuestion()
             }
             mode == PracticeMode.WRONG && result.error.code == QUESTION_ALREADY_MASTERED -> {
-                appDataSync?.recordPracticeChanged()
+                if (appDataSession != null) appDataSync?.recordPracticeChanged(appDataSession)
                 mutableUiState.value = mutableUiState.value.copy(submitting = false)
                 eventChannel.send(QuestionEvent.WrongMastered(questionId, returnToList = true))
             }

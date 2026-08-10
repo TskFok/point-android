@@ -47,7 +47,7 @@ class AppContainer(
     private val refreshCoordinator = RefreshCoordinator(publicAuthGateway, sessionManager, sessionState)
     private val authorizedCallExecutor = AuthorizedCallExecutor(sessionState, refreshCoordinator)
     private val retryExecutor = RetryExecutor()
-    override val appDataSync = AppDataSync()
+    override val appDataSync = AppDataSync(sessionState)
 
     val imageLoader: ImageLoader = createProductImageLoader(applicationContext, apiClients.publicHttpClient)
 

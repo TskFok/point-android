@@ -2,8 +2,12 @@ package com.pointquest.android.feature.shop
 
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.core.auth.ActiveSession
+import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.PageMeta
 import com.pointquest.android.core.model.Product
+import com.pointquest.android.core.model.User
+import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.data.products.ProductsRepository
@@ -166,7 +170,7 @@ class ProductListViewModelTest {
 
     @Test
     fun inactiveProductIsRemovedAndShopRefreshesOnline() = runTest {
-        val sync = AppDataSync()
+        val sync = signedInSync()
         val repository = FakeProductsRepository().apply {
             enqueuePage(success(page(1, 1, product("p1"), product("p2"))))
             enqueuePage(success(page(1, 1, product("p2"))))
@@ -174,12 +178,110 @@ class ProductListViewModelTest {
         val viewModel = ProductListViewModel(repository, backgroundScope, appDataSync = sync)
         viewModel.initialize()?.join()
 
-        sync.recordProductInactive("p1")
+        sync.recordProductInactive(checkNotNull(sync.captureSession()), "p1")
         runCurrent()
         viewModel.refreshJob?.join()
 
         assertEquals(listOf("p2"), viewModel.uiState.value.items.map(Product::id))
         assertEquals(listOf(null to 1, null to 1), repository.pageCalls)
+    }
+
+    @Test
+    fun successfulFirstPageAfterInactiveRevisionClearsTombstoneAndShowsRelistedProduct() = runTest {
+        val authoritativeRefresh = CompletableDeferred<AppResult<Page<Product>>>()
+        val sync = signedInSync()
+        val repository = FakeProductsRepository().apply {
+            enqueuePage(success(page(1, 1, product("p1"), product("p2"))))
+            enqueuePage(DeferredPage(authoritativeRefresh))
+        }
+        val viewModel = ProductListViewModel(repository, backgroundScope, appDataSync = sync)
+        viewModel.initialize()?.join()
+
+        sync.recordProductInactive(checkNotNull(sync.captureSession()), "p1")
+        runCurrent()
+        assertEquals(listOf("p2"), viewModel.uiState.value.items.map(Product::id))
+
+        authoritativeRefresh.complete(success(page(1, 1, product("p1"), product("p2"))))
+        viewModel.refreshJob?.join()
+
+        assertEquals(listOf("p1", "p2"), viewModel.uiState.value.items.map(Product::id))
+        assertTrue(sync.state.value.inactiveProductIds.isEmpty())
+    }
+
+    @Test
+    fun failedAuthoritativeRefreshKeepsTombstoneUntilSuccessfulRetry() = runTest {
+        val sync = signedInSync()
+        val repository = FakeProductsRepository().apply {
+            enqueuePage(success(page(1, 1, product("p1"), product("p2"))))
+            enqueuePage(failure("NETWORK_ERROR"))
+            enqueuePage(success(page(1, 1, product("p1"), product("p2"))))
+        }
+        val viewModel = ProductListViewModel(repository, backgroundScope, appDataSync = sync)
+        viewModel.initialize()?.join()
+
+        sync.recordProductInactive(checkNotNull(sync.captureSession()), "p1")
+        runCurrent()
+        viewModel.refreshJob?.join()
+        assertEquals(listOf("p2"), viewModel.uiState.value.items.map(Product::id))
+        assertTrue("p1" in sync.state.value.inactiveProductIds)
+
+        viewModel.refresh()?.join()
+
+        assertEquals(listOf("p1", "p2"), viewModel.uiState.value.items.map(Product::id))
+        assertTrue(sync.state.value.inactiveProductIds.isEmpty())
+    }
+
+    @Test
+    fun shopRevisionDuringInitialLoadRestartsAndOldResponseCannotReplaceLatest() = runTest {
+        val oldInitial = CompletableDeferred<AppResult<Page<Product>>>()
+        val latest = CompletableDeferred<AppResult<Page<Product>>>()
+        val sync = signedInSync()
+        val repository = FakeProductsRepository().apply {
+            enqueuePage(DeferredPage(oldInitial, ignoreCancellation = true))
+            enqueuePage(DeferredPage(latest))
+        }
+        val viewModel = ProductListViewModel(repository, backgroundScope, appDataSync = sync)
+        viewModel.initialize()
+        runCurrent()
+
+        sync.recordOrderCreated(checkNotNull(sync.captureSession()), balance = 30)
+        runCurrent()
+        assertEquals(listOf(null to 1, null to 1), repository.pageCalls)
+
+        latest.complete(success(page(1, 1, product("latest"))))
+        runCurrent()
+        oldInitial.complete(success(page(1, 1, product("old"))))
+        advanceUntilIdle()
+
+        assertEquals(listOf("latest"), viewModel.uiState.value.items.map(Product::id))
+    }
+
+    @Test
+    fun inactiveRevisionDuringPullRefreshRestartsAndOldResponseCannotReplaceLatest() = runTest {
+        val oldRefresh = CompletableDeferred<AppResult<Page<Product>>>()
+        val latest = CompletableDeferred<AppResult<Page<Product>>>()
+        val sync = signedInSync()
+        val repository = FakeProductsRepository().apply {
+            enqueuePage(success(page(1, 1, product("p1"))))
+            enqueuePage(DeferredPage(oldRefresh, ignoreCancellation = true))
+            enqueuePage(DeferredPage(latest))
+        }
+        val viewModel = ProductListViewModel(repository, backgroundScope, appDataSync = sync)
+        viewModel.initialize()?.join()
+        viewModel.refresh()
+        runCurrent()
+
+        sync.recordProductInactive(checkNotNull(sync.captureSession()), "p1")
+        runCurrent()
+        assertTrue(viewModel.uiState.value.items.isEmpty())
+        assertEquals(listOf(null to 1, null to 1, null to 1), repository.pageCalls)
+
+        latest.complete(success(page(1, 1, product("latest"))))
+        runCurrent()
+        oldRefresh.complete(success(page(1, 1, product("old"))))
+        advanceUntilIdle()
+
+        assertEquals(listOf("latest"), viewModel.uiState.value.items.map(Product::id))
     }
 
     private sealed interface PageResponse
@@ -219,6 +321,19 @@ class ProductListViewModelTest {
     private companion object {
         fun success(page: Page<Product>) = AppResult.Success(page)
         fun failure(code: String) = AppResult.Failure(AppError(null, code, "failed", null))
+        fun signedInSync(): AppDataSync {
+            val sessionState = SessionState().apply {
+                publish(
+                    ActiveSession(
+                        user = User("student-1", "student", UserRole.STUDENT, 42),
+                        accessToken = "token",
+                        accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
+                        generation = 1,
+                    ),
+                )
+            }
+            return AppDataSync(sessionState)
+        }
         fun page(
             pageNumber: Int,
             totalPages: Int,

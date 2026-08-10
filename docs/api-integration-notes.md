@@ -81,7 +81,7 @@ Access Token 只存在 `SessionState` 的进程内活动会话中。密码、Acc
 
 答题、兑换和商品下架结果通过 `AppDataSync` 发布进程内失效信号：
 
-- 同步状态绑定当前 `(userId, sessionGeneration)`。`SignedOut` 或新的会话 generation 发布时，余额、刷新 revision 与临时下架标记在同一快照中清空；旧会话请求的迟到结果会因会话键不匹配而被丢弃。
+- 同步状态绑定当前 `(userId, loginSessionId)`，与 access-token `generation` 分离。显式 `SignedOut`、换账号、同账号重新登录或从存储恢复为新登录会话时，余额、刷新 revision 与临时下架标记在同一快照中清空；旧登录会话请求的迟到结果会因会话键不匹配而被丢弃。同一登录会话内的预检或 401 凭据刷新只推进 token generation，保留同步余额、revision、未确认 tombstone，并允许刷新前已发起的成功业务操作合法回写。
 - 答题或兑换响应携带的新余额会立即更新仍存活的首页/个人中心状态。
 - 答题后首页重新在线拉取练习摘要与积分余额。
 - 兑换成功后首页与商店重新在线拉取；商店以服务端商品库存/状态为准。

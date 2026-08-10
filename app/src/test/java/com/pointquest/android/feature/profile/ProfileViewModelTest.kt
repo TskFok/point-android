@@ -122,6 +122,7 @@ class ProfileViewModelTest {
             accessToken = "token",
             accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
             generation = generation,
+            loginSessionId = generation,
         )
     }
 }

@@ -33,6 +33,7 @@ class SessionManager(
 ) {
     private val mutex = Mutex()
     private var epoch = state.active.value?.generation ?: 0L
+    private var loginSessionSequence = state.active.value?.loginSessionId ?: 0L
     private var refreshMaterialValid = true
 
     internal suspend fun acquireRefreshLease(): AppResult<RefreshMaterialSnapshot> = mutex.withLock {
@@ -66,7 +67,7 @@ class SessionManager(
         }
 
     suspend fun install(bundle: TokenBundle): AppResult<ActiveSession> =
-        mutex.withLock { installLocked(bundle) }
+        mutex.withLock { installLocked(bundle, preserveCurrentLoginSession = false) }
 
     internal suspend fun commitRefresh(
         lease: RefreshMaterialSnapshot.Available,
@@ -75,7 +76,12 @@ class SessionManager(
         if (epoch != lease.epoch) {
             return@withLock AppResult.Success(RefreshCommit.Stale(state.active.value))
         }
-        when (val installed = installLocked(bundle)) {
+        val current = state.active.value
+        if (current != null && current.user.id != bundle.user.id) {
+            cleanupLockedPreservingFailure()
+            return@withLock AppResult.Success(RefreshCommit.Stale(state.active.value))
+        }
+        when (val installed = installLocked(bundle, preserveCurrentLoginSession = true)) {
             is AppResult.Failure -> installed
             is AppResult.Success -> AppResult.Success(RefreshCommit.Installed(installed.value))
         }
@@ -103,7 +109,10 @@ class SessionManager(
         }
     }
 
-    private suspend fun installLocked(bundle: TokenBundle): AppResult<ActiveSession> {
+    private suspend fun installLocked(
+        bundle: TokenBundle,
+        preserveCurrentLoginSession: Boolean,
+    ): AppResult<ActiveSession> {
         val storedSession = StoredRefreshSession(
             refreshToken = bundle.refreshToken,
             expiresAt = bundle.refreshTokenExpiresAt,
@@ -121,11 +130,19 @@ class SessionManager(
 
         epoch += 1
         refreshMaterialValid = true
+        val current = state.active.value
+        val loginSessionId = if (preserveCurrentLoginSession && current != null) {
+            current.loginSessionId
+        } else {
+            loginSessionSequence += 1
+            loginSessionSequence
+        }
         val activeSession = ActiveSession(
             user = bundle.user,
             accessToken = bundle.accessToken,
             accessTokenExpiresAt = bundle.accessTokenExpiresAt,
             generation = epoch,
+            loginSessionId = loginSessionId,
         )
         state.publish(activeSession)
         return AppResult.Success(activeSession)

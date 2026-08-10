@@ -238,6 +238,52 @@ class ProductDetailViewModelTest {
         assertTrue("p1" in inactiveSync.state.value.inactiveProductIds)
     }
 
+    @Test
+    fun successfulRedeemAcrossAuthRefreshMustStillPublishTopLevelInvalidation() = runTest {
+        val sessionState = SessionState().apply {
+            publish(
+                ActiveSession(
+                    user = User("student-1", "student", UserRole.STUDENT, 42),
+                    accessToken = "old-token",
+                    accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
+                    generation = 1,
+                    loginSessionId = 1,
+                ),
+            )
+        }
+        val sync = AppDataSync(sessionState)
+        val orders = FakeOrdersRepository().apply {
+            beforeRedeem = {
+                sessionState.publish(
+                    ActiveSession(
+                        user = User("student-1", "student", UserRole.STUDENT, 42),
+                        accessToken = "refreshed-token",
+                        accessTokenExpiresAt = Instant.parse("2030-01-01T01:05:00Z"),
+                        generation = 2,
+                        loginSessionId = 1,
+                    ),
+                )
+            }
+            enqueue(AppResult.Success(order("o1")))
+        }
+        val viewModel = ProductDetailViewModel(
+            "p1",
+            FakeProductsRepository(detailResult = AppResult.Success(product())),
+            orders,
+            FakePointsRepository(balanceResult = AppResult.Success(20)),
+            scopeOverride = backgroundScope,
+            appDataSync = sync,
+        )
+        viewModel.initialize()?.join()
+        viewModel.requestRedeemConfirmation()
+
+        viewModel.confirmRedeem()?.join()
+
+        assertEquals(10, sync.state.value.balance)
+        assertEquals(1L, sync.state.value.homeRefreshRevision)
+        assertEquals(1L, sync.state.value.shopRefreshRevision)
+    }
+
     private suspend fun kotlinx.coroutines.test.TestScope.loadedViewModel(
         orders: FakeOrdersRepository,
     ): ProductDetailViewModel {
@@ -283,10 +329,12 @@ class ProductDetailViewModelTest {
     private class FakeOrdersRepository : OrdersRepository {
         private val responses = ArrayDeque<Any>()
         var redeemCalls = 0
+        var beforeRedeem: (suspend () -> Unit)? = null
         fun enqueue(result: AppResult<Order>) { responses += result }
         fun enqueue(result: CompletableDeferred<AppResult<Order>>) { responses += result }
         override suspend fun redeem(productId: String): AppResult<Order> {
             redeemCalls++
+            beforeRedeem?.invoke()
             return when (val response = responses.removeFirst()) {
                 is CompletableDeferred<*> -> @Suppress("UNCHECKED_CAST")
                 (response as CompletableDeferred<AppResult<Order>>).await()
@@ -309,6 +357,7 @@ class ProductDetailViewModelTest {
                         accessToken = "token",
                         accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
                         generation = 1,
+                        loginSessionId = 1,
                     ),
                 )
             }

@@ -217,10 +217,58 @@ class SessionManagerTest {
         val first = manager.install(sampleTokenBundle(accessToken = "access-1"))
         val second = manager.install(sampleTokenBundle(accessToken = "access-2"))
 
-        assertEquals(1L, (first as AppResult.Success).value.generation)
-        assertEquals(2L, (second as AppResult.Success).value.generation)
+        val firstSession = (first as AppResult.Success).value
+        val secondSession = (second as AppResult.Success).value
+        assertEquals(1L, firstSession.generation)
+        assertEquals(2L, secondSession.generation)
+        assertTrue(firstSession.loginSessionId != secondSession.loginSessionId)
         assertEquals("access-2", state.active.value?.accessToken)
         assertEquals(2L, state.active.value?.generation)
+    }
+
+    @Test
+    fun credentialRefreshAdvancesGenerationButPreservesLoginSessionIdentity() = runBlocking {
+        val state = SessionState()
+        val manager = SessionManager(FakeSessionStore(), state)
+        val installed = manager.install(
+            sampleTokenBundle(accessToken = "old-access", refreshToken = "old-refresh"),
+        ) as AppResult.Success
+        val lease = (manager.acquireRefreshLease() as AppResult.Success).value as
+            RefreshMaterialSnapshot.Available
+
+        val committed = manager.commitRefresh(
+            lease,
+            sampleTokenBundle(accessToken = "new-access", refreshToken = "new-refresh"),
+        ) as AppResult.Success
+
+        val refreshed = (committed.value as RefreshCommit.Installed).session
+        assertEquals(installed.value.loginSessionId, refreshed.loginSessionId)
+        assertEquals(installed.value.generation + 1, refreshed.generation)
+        assertEquals("new-access", state.active.value?.accessToken)
+    }
+
+    @Test
+    fun credentialRefreshCannotInstallAResponseForAnotherUser() = runBlocking {
+        val state = SessionState()
+        val store = FakeSessionStore()
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle(accessToken = "old-access", refreshToken = "old-refresh"))
+        val lease = (manager.acquireRefreshLease() as AppResult.Success).value as
+            RefreshMaterialSnapshot.Available
+        val otherUser = User("student-2", "other", UserRole.STUDENT, 7)
+
+        val committed = manager.commitRefresh(
+            lease,
+            sampleTokenBundle(
+                accessToken = "wrong-user-access",
+                refreshToken = "wrong-user-refresh",
+                user = otherUser,
+            ),
+        ) as AppResult.Success
+
+        assertTrue(committed.value is RefreshCommit.Stale)
+        assertNull(state.active.value)
+        assertNull(store.lastWritten)
     }
 
     @Test

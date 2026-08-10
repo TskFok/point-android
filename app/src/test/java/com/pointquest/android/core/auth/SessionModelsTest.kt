@@ -28,6 +28,7 @@ class SessionModelsTest {
             accessToken = token,
             accessTokenExpiresAt = Instant.parse("2030-01-01T01:00:00Z"),
             generation = 27,
+            loginSessionId = 9,
         )
 
         val rendered = session.toString()
@@ -35,6 +36,7 @@ class SessionModelsTest {
         assertFalse(rendered.contains(token))
         assertTrue(rendered.contains("[REDACTED]"))
         assertTrue(rendered.contains("generation=27"))
+        assertTrue(rendered.contains("loginSessionId=9"))
         assertTrue(rendered.contains("username=student"))
     }
 }

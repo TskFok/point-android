@@ -24,18 +24,36 @@ class SessionState {
 
     internal fun publish(session: ActiveSession) = synchronized(observerLock) {
         mutableActive.value = session
-        activeSessionObservers.forEach { it(session) }
+        val observerFailure = notifyActiveSessionObservers(session)
         mutableStatus.value = SessionStatus.SignedIn(session.user)
+        observerFailure?.let { throw it }
     }
 
     internal fun clear() = synchronized(observerLock) {
         mutableActive.value = null
-        activeSessionObservers.forEach { it(null) }
+        val observerFailure = notifyActiveSessionObservers(null)
         mutableStatus.value = SessionStatus.SignedOut
+        observerFailure?.let { throw it }
     }
 
     internal fun observeActiveSession(observer: (ActiveSession?) -> Unit) = synchronized(observerLock) {
-        activeSessionObservers += observer
         observer(mutableActive.value)
+        activeSessionObservers += observer
+    }
+
+    private fun notifyActiveSessionObservers(session: ActiveSession?): Throwable? {
+        var firstFailure: Throwable? = null
+        activeSessionObservers.toList().forEach { observer ->
+            try {
+                observer(session)
+            } catch (failure: Throwable) {
+                if (firstFailure == null) {
+                    firstFailure = failure
+                } else if (firstFailure !== failure) {
+                    firstFailure.addSuppressed(failure)
+                }
+            }
+        }
+        return firstFailure
     }
 }

@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.update
 
 data class AppDataSession(
     val userId: String,
-    val generation: Long,
+    val loginSessionId: Long,
 )
 
 class AppDataSyncState internal constructor(
@@ -35,7 +35,10 @@ class AppDataSync(sessionState: SessionState) {
 
     init {
         sessionState.observeActiveSession { activeSession ->
-            mutableState.value = AppDataSyncState(session = activeSession?.toAppDataSession())
+            val nextSession = activeSession?.toAppDataSession()
+            mutableState.update { current ->
+                if (current.session == nextSession) current else AppDataSyncState(session = nextSession)
+            }
         }
     }
 
@@ -100,7 +103,7 @@ class AppDataSync(sessionState: SessionState) {
 
     private fun validBalance(balance: Int?): Int? = balance?.takeIf { it >= 0 }
 
-    private fun ActiveSession.toAppDataSession() = AppDataSession(user.id, generation)
+    private fun ActiveSession.toAppDataSession() = AppDataSession(user.id, loginSessionId)
 
     private fun AppDataSyncState.copy(
         balance: Int? = this.balance,

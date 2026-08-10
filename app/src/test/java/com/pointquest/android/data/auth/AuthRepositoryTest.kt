@@ -111,6 +111,7 @@ class AuthRepositoryTest {
         assertEquals(listOf("stored-refresh"), fixture.gateway.refreshTokens)
         assertEquals("refresh-token", fixture.store.value?.refreshToken)
         assertEquals("access-token", fixture.state.active.value?.accessToken)
+        assertEquals(1L, fixture.state.active.value?.loginSessionId)
     }
 
     @Test

@@ -132,6 +132,52 @@ class QuestionViewModelTest {
     }
 
     @Test
+    fun successfulAnswerAcrossAuthRefreshMustStillPublishTopLevelInvalidation() = runBlocking {
+        val sessionState = SessionState().apply {
+            publish(
+                ActiveSession(
+                    user = User("student-1", "student", UserRole.STUDENT, 42),
+                    accessToken = "old-token",
+                    accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
+                    generation = 1,
+                    loginSessionId = 1,
+                ),
+            )
+        }
+        val sync = AppDataSync(sessionState)
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(successQuestion("q1")),
+            firstAnswerResults = arrayDequeOf(AppResult.Success(sampleAnswer(true, "o2"))),
+            beforeFirstAnswer = {
+                sessionState.publish(
+                    ActiveSession(
+                        user = User("student-1", "student", UserRole.STUDENT, 42),
+                        accessToken = "refreshed-token",
+                        accessTokenExpiresAt = Instant.parse("2030-01-01T01:05:00Z"),
+                        generation = 2,
+                        loginSessionId = 1,
+                    ),
+                )
+            },
+        )
+        val viewModel = QuestionViewModel(
+            repository = repository,
+            mode = PracticeMode.FIRST,
+            draftStore = null,
+            questionId = null,
+            scopeOverride = CoroutineScope(Job() + Dispatchers.Unconfined),
+            appDataSync = sync,
+        )
+        viewModel.loadFirstQuestion().join()
+        viewModel.selectOption("o2")
+
+        viewModel.submit()?.join()
+
+        assertEquals(45, sync.state.value.balance)
+        assertEquals(1L, sync.state.value.homeRefreshRevision)
+    }
+
+    @Test
     fun newestLoadWinsEvenWhenCancelledRequestReturnsLater() = runBlocking {
         val stale = CompletableDeferred<AppResult<Question>>()
         val repository = FakePracticeRepository(
@@ -304,6 +350,7 @@ class QuestionViewModelTest {
         val firstAnswerResults: ArrayDeque<AppResult<AnswerResult>> = ArrayDeque(),
         val wrongAnswerResults: ArrayDeque<AppResult<AnswerResult>> = ArrayDeque(),
         val firstAnswerDeferred: CompletableDeferred<AppResult<AnswerResult>>? = null,
+        val beforeFirstAnswer: (suspend () -> Unit)? = null,
     ) : PracticeRepository {
         val excludeCalls = mutableListOf<List<String>>()
         val firstAnswerCalls = mutableListOf<Pair<String, String>>()
@@ -318,6 +365,7 @@ class QuestionViewModelTest {
 
         override suspend fun answerFirst(questionId: String, selectedOptionId: String): AppResult<AnswerResult> {
             firstAnswerCalls += questionId to selectedOptionId
+            beforeFirstAnswer?.invoke()
             return firstAnswerDeferred?.let { withContext(NonCancellable) { it.await() } }
                 ?: firstAnswerResults.removeFirst()
         }
@@ -361,6 +409,7 @@ class QuestionViewModelTest {
                         accessToken = "token",
                         accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
                         generation = 1,
+                        loginSessionId = 1,
                     ),
                 )
             }

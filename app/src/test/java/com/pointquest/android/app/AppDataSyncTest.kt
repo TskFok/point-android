@@ -39,7 +39,7 @@ class AppDataSyncTest {
     }
 
     @Test
-    fun sessionChangeAtomicallyClearsSyncStateAndRejectsStaleGenerationWrites() {
+    fun newLoginSessionAtomicallyClearsSyncStateAndRejectsStaleWrites() {
         val sessionState = SessionState().apply { publish(activeSession("student-a", 1)) }
         val sync = AppDataSync(sessionState)
         val accountA = checkNotNull(sync.captureSession())
@@ -58,7 +58,7 @@ class AppDataSyncTest {
         sync.recordOrderCreated(accountA, 5)
 
         assertEquals("student-a", sync.state.value.session?.userId)
-        assertEquals(2L, sync.state.value.session?.generation)
+        assertEquals(2L, sync.state.value.session?.loginSessionId)
         assertNull(sync.state.value.balance)
         assertEquals(0L, sync.state.value.homeRefreshRevision)
         assertEquals(0L, sync.state.value.shopRefreshRevision)
@@ -68,10 +68,26 @@ class AppDataSyncTest {
         assertEquals(88, sync.state.value.balance)
     }
 
-    private fun activeSession(userId: String, generation: Long) = ActiveSession(
+    @Test
+    fun sameAccountCredentialRefreshMustNotClearUnacknowledgedTombstone() {
+        val sessionState = SessionState().apply { publish(activeSession("student-a", 1)) }
+        val sync = AppDataSync(sessionState)
+        sync.recordProductInactive(checkNotNull(sync.captureSession()), "p1")
+
+        sessionState.publish(activeSession("student-a", 2, loginSessionId = 1))
+
+        assertTrue("p1" in sync.state.value.inactiveProductIds)
+    }
+
+    private fun activeSession(
+        userId: String,
+        generation: Long,
+        loginSessionId: Long = generation,
+    ) = ActiveSession(
         user = User(userId, userId, UserRole.STUDENT, 42),
         accessToken = "token",
         accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
         generation = generation,
+        loginSessionId = loginSessionId,
     )
 }

@@ -165,6 +165,7 @@ class HomeViewModelTest {
                     accessToken = "token",
                     accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
                     generation = 1,
+                    loginSessionId = 1,
                 ),
             )
         }

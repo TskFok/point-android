@@ -34,7 +34,9 @@ class RefreshCoordinatorTest {
         val store = FakeSessionStore()
         val state = SessionState()
         val manager = SessionManager(store, state)
-        manager.install(tokenBundle(accessToken = "old-access", refreshToken = "old-refresh"))
+        val installed = manager.install(
+            tokenBundle(accessToken = "old-access", refreshToken = "old-refresh"),
+        ) as AppResult.Success
         val gateway = FakePublicAuthGateway(
             refreshEntered = refreshEntered,
             releaseRefresh = releaseRefresh,
@@ -62,6 +64,7 @@ class RefreshCoordinatorTest {
         assertEquals(listOf("old-refresh"), gateway.refreshTokens)
         assertEquals("rotated-refresh", store.value?.refreshToken)
         assertEquals(2L, state.active.value?.generation)
+        assertEquals(installed.value.loginSessionId, state.active.value?.loginSessionId)
     }
 
     @Test

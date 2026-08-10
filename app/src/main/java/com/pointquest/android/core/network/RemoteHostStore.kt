@@ -37,6 +37,7 @@ class RemoteHostStore(
     private val validator: RemoteHostValidator,
 ) {
     private val defaultValue = validatedDefault(defaultHost)
+    private val applyLock = Any()
     private val mutableHost = MutableStateFlow(initialHost())
 
     val currentHost: String
@@ -47,12 +48,14 @@ class RemoteHostStore(
     fun apply(raw: String): RemoteHostApplyResult {
         return when (val validation = validator.validate(raw)) {
             is RemoteHostValidation.Invalid -> RemoteHostApplyResult.Rejected(validation.code)
-            is RemoteHostValidation.Valid -> try {
-                persistence.write(validation.normalized)
-                mutableHost.value = validation.normalized
-                RemoteHostApplyResult.Applied(validation.normalized)
-            } catch (_: Exception) {
-                RemoteHostApplyResult.PersistenceFailed
+            is RemoteHostValidation.Valid -> synchronized(applyLock) {
+                try {
+                    persistence.write(validation.normalized)
+                    mutableHost.value = validation.normalized
+                    RemoteHostApplyResult.Applied(validation.normalized)
+                } catch (_: Exception) {
+                    RemoteHostApplyResult.PersistenceFailed
+                }
             }
         }
     }

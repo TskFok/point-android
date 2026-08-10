@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.pointquest.android.app.AppRoute
 import com.pointquest.android.core.auth.SessionStatus
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,6 +22,70 @@ import org.junit.runner.RunWith
 class AppNavigationTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun unappliedHostPreventsLoginRepositoryCall() {
+        val dependencies = FakeAppDependencies()
+        composeRule.setContent {
+            AppNavigationTestShell(
+                session = FakeAppSession(SessionStatus.SignedOut),
+                dependencies = dependencies,
+            )
+        }
+
+        composeRule.onNodeWithTag("login_host").performTextClearance()
+        composeRule.onNodeWithTag("login_host").performTextInput("http://new.example.invalid/")
+        composeRule.onNodeWithTag("login_username").performTextInput("student")
+        composeRule.onNodeWithTag("login_password").performTextInput("Student1234")
+        composeRule.onNodeWithTag("login_submit").performClick()
+
+        composeRule.onNodeWithText("请先应用新的服务端地址").assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals(0, dependencies.loginCalls) }
+    }
+
+    @Test
+    fun unappliedHostPreventsNavigationToRegister() {
+        val dependencies = FakeAppDependencies()
+        composeRule.setContent {
+            AppNavigationTestShell(
+                session = FakeAppSession(SessionStatus.SignedOut),
+                dependencies = dependencies,
+            )
+        }
+
+        composeRule.onNodeWithTag("login_host").performTextClearance()
+        composeRule.onNodeWithTag("login_host").performTextInput("http://new.example.invalid/")
+        composeRule.onNodeWithText("还没有账号？注册账号").performClick()
+
+        composeRule.onNodeWithText("欢迎回来").assertIsDisplayed()
+        composeRule.onNodeWithText("请先应用新的服务端地址").assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals(0, dependencies.registerCalls) }
+    }
+
+    @Test
+    fun unappliedHostPreventsRegisterRepositoryCallWhenRouteIsOpenedDirectly() {
+        val dependencies = FakeAppDependencies()
+        lateinit var navController: NavHostController
+        composeRule.setContent {
+            navController = rememberNavController()
+            AppNavigationTestShell(
+                session = FakeAppSession(SessionStatus.SignedOut),
+                navController = navController,
+                dependencies = dependencies,
+            )
+        }
+
+        composeRule.onNodeWithTag("login_host").performTextClearance()
+        composeRule.onNodeWithTag("login_host").performTextInput("http://new.example.invalid/")
+        composeRule.runOnUiThread { navController.navigate(AppRoute.Register) }
+        composeRule.onNodeWithTag("register_username").performTextInput("new_student")
+        composeRule.onNodeWithTag("register_password").performTextInput("Student1234")
+        composeRule.onNodeWithTag("register_confirm_password").performTextInput("Student1234")
+        composeRule.onNodeWithTag("register_submit").performClick()
+
+        composeRule.onNodeWithText("创建学生账号").assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals(0, dependencies.registerCalls) }
+    }
 
     @Test
     fun signedOutRegisterLoginAndBottomNavigationFlow() {

@@ -26,7 +26,7 @@ class RemoteHostViewModelTest {
         assertTrue(viewModel.uiState.value.draftHost != viewModel.uiState.value.activeHost)
         viewModel.apply()!!.join()
         assertEquals("https://new.example.test/", viewModel.uiState.value.activeHost)
-        assertTrue(viewModel.requireAppliedForLogin())
+        assertTrue(viewModel.requireAppliedForAuthentication())
     }
 
     @Test
@@ -39,7 +39,7 @@ class RemoteHostViewModelTest {
         assertEquals("https://default.example.test/", viewModel.uiState.value.activeHost)
         assertEquals("https://new.example.test/api", viewModel.uiState.value.draftHost)
         assertEquals(UiText.Resource(R.string.remote_host_error_root_path), viewModel.uiState.value.error)
-        assertFalse(viewModel.requireAppliedForLogin())
+        assertFalse(viewModel.requireAppliedForAuthentication())
     }
 
     @Test
@@ -52,7 +52,7 @@ class RemoteHostViewModelTest {
 
         assertNull(viewModel.uiState.value.error)
         assertNull(viewModel.uiState.value.message)
-        assertFalse(viewModel.requireAppliedForLogin())
+        assertFalse(viewModel.requireAppliedForAuthentication())
         assertEquals(
             UiText.Resource(R.string.remote_host_apply_before_login),
             viewModel.uiState.value.error,
@@ -75,12 +75,23 @@ class RemoteHostViewModelTest {
     }
 
     @Test
+    fun authenticationIsBlockedWhileCurrentHostIsBeingApplied() = runTest {
+        val viewModel = RemoteHostViewModel(store(), backgroundScope)
+
+        val applyJob = viewModel.apply()
+
+        assertTrue(viewModel.uiState.value.applying)
+        assertFalse(viewModel.requireAppliedForAuthentication())
+        applyJob!!.join()
+    }
+
+    @Test
     fun successfulApplyClearsLoginPreconditionErrorSetWhileApplying() = runTest {
         val viewModel = RemoteHostViewModel(store(), backgroundScope)
         viewModel.updateHost("https://new.example.test")
 
         val applyJob = viewModel.apply()
-        assertFalse(viewModel.requireAppliedForLogin())
+        assertFalse(viewModel.requireAppliedForAuthentication())
         assertEquals(
             UiText.Resource(R.string.remote_host_apply_before_login),
             viewModel.uiState.value.error,

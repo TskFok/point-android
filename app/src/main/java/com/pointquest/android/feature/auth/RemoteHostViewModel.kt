@@ -78,9 +78,10 @@ class RemoteHostViewModel(
         }
     }
 
-    fun requireAppliedForLogin(): Boolean {
-        if (mutableUiState.value.draftHost == mutableUiState.value.activeHost) return true
-        mutableUiState.value = mutableUiState.value.copy(
+    fun requireAppliedForAuthentication(): Boolean {
+        val current = mutableUiState.value
+        if (!current.applying && current.draftHost == current.activeHost) return true
+        mutableUiState.value = current.copy(
             error = UiText.Resource(R.string.remote_host_apply_before_login),
         )
         return false

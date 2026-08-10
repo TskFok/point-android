@@ -77,6 +77,11 @@ internal fun testStudent() = User(
 internal class FakeAppDependencies(
     private val onLogin: (User) -> Unit = {},
 ) : AppDependencies {
+    var registerCalls: Int = 0
+        private set
+    var loginCalls: Int = 0
+        private set
+
     override val sessionState = SessionState().apply {
         publish(
             ActiveSession(
@@ -107,9 +112,12 @@ internal class FakeAppDependencies(
     override val productImageUrlFactory = ProductImageUrlFactory(remoteHostStore::currentHost)
 
     override val authRepository: AuthRepository = object : AuthRepository {
-        override suspend fun register(username: String, password: String) =
-            AppResult.Success(testStudent().copy(username = username))
+        override suspend fun register(username: String, password: String): AppResult<User> {
+            registerCalls++
+            return AppResult.Success(testStudent().copy(username = username))
+        }
         override suspend fun login(username: String, password: String): AppResult<User> {
+            loginCalls++
             val user = testStudent().copy(username = username)
             onLogin(user)
             return AppResult.Success(user)

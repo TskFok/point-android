@@ -79,6 +79,16 @@ fun AppNavHost(
 ) {
     val resolver = RootDestinationResolver()
     val startDestination = resolver.resolve(sessionStatus)
+    val remoteHostViewModel = if (container == null) {
+        null
+    } else {
+        val remoteHostFactory = remember(container.remoteHostStore) {
+            ViewModelFactory<RemoteHostViewModel> {
+                RemoteHostViewModel(container.remoteHostStore)
+            }
+        }
+        viewModel<RemoteHostViewModel>(factory = remoteHostFactory)
+    }
 
     LaunchedEffect(sessionStatus) {
         val target = resolver.resolve(sessionStatus)
@@ -114,18 +124,13 @@ fun AppNavHost(
                     onApplyHost = {},
                 )
             } else {
+                val hostViewModel = checkNotNull(remoteHostViewModel)
                 val factory = remember(container.authRepository) {
                     ViewModelFactory<AuthViewModel> { AuthViewModel(container.authRepository) }
                 }
                 val authViewModel: AuthViewModel = viewModel(factory = factory)
                 val state by authViewModel.uiState.collectAsStateWithLifecycle()
-                val remoteHostFactory = remember(container.remoteHostStore) {
-                    ViewModelFactory<RemoteHostViewModel> {
-                        RemoteHostViewModel(container.remoteHostStore)
-                    }
-                }
-                val remoteHostViewModel: RemoteHostViewModel = viewModel(factory = remoteHostFactory)
-                val hostState by remoteHostViewModel.uiState.collectAsStateWithLifecycle()
+                val hostState by hostViewModel.uiState.collectAsStateWithLifecycle()
                 val registeredUsername by entry.savedStateHandle
                     .getStateFlow<String?>(REGISTERED_USERNAME_KEY, null)
                     .collectAsStateWithLifecycle()
@@ -141,13 +146,17 @@ fun AppNavHost(
                     onUsernameChange = authViewModel::updateUsername,
                     onPasswordChange = authViewModel::updatePassword,
                     onLogin = {
-                        if (remoteHostViewModel.requireAppliedForLogin()) {
+                        if (hostViewModel.requireAppliedForAuthentication()) {
                             authViewModel.login()
                         }
                     },
-                    onRegister = { navController.navigate(AppRoute.Register) },
-                    onHostChange = remoteHostViewModel::updateHost,
-                    onApplyHost = { remoteHostViewModel.apply() },
+                    onRegister = {
+                        if (hostViewModel.requireAppliedForAuthentication()) {
+                            navController.navigate(AppRoute.Register)
+                        }
+                    },
+                    onHostChange = hostViewModel::updateHost,
+                    onApplyHost = { hostViewModel.apply() },
                 )
             }
         }
@@ -164,6 +173,7 @@ fun AppNavHost(
                     },
                 )
             } else {
+                val hostViewModel = checkNotNull(remoteHostViewModel)
                 val factory = remember(container.authRepository) {
                     ViewModelFactory<AuthViewModel> { AuthViewModel(container.authRepository) }
                 }
@@ -191,7 +201,11 @@ fun AppNavHost(
                     onUsernameChange = authViewModel::updateUsername,
                     onPasswordChange = authViewModel::updatePassword,
                     onConfirmPasswordChange = authViewModel::updateConfirmPassword,
-                    onRegister = { authViewModel.register() },
+                    onRegister = {
+                        if (hostViewModel.requireAppliedForAuthentication()) {
+                            authViewModel.register()
+                        }
+                    },
                     onBackToLogin = {
                         if (!navController.popBackStack()) navController.navigate(AppRoute.Login)
                     },

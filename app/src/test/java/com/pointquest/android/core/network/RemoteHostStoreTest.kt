@@ -1,6 +1,11 @@
 package com.pointquest.android.core.network
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,7 +71,45 @@ class RemoteHostStoreTest {
         assertEquals(defaultHost, store.hostFlow.value)
     }
 
-    private fun store(persistence: MemoryPersistence) = RemoteHostStore(
+    @Test
+    fun appliesAreSerializedAcrossPersistenceAndPublication() {
+        val persistence = BlockingFirstWritePersistence()
+        val store = store(persistence)
+        val executor = Executors.newFixedThreadPool(2)
+
+        try {
+            val first = executor.submit<RemoteHostApplyResult> {
+                store.apply("https://first.example.test/")
+            }
+            assertTrue(persistence.awaitFirstWrite())
+
+            val second = executor.submit<RemoteHostApplyResult> {
+                store.apply("https://second.example.test/")
+            }
+
+            assertFalse(
+                "A concurrent apply must not enter persistence before the first apply publishes",
+                persistence.awaitSecondWrite(),
+            )
+            persistence.releaseFirstWrite()
+
+            assertEquals(
+                RemoteHostApplyResult.Applied("https://first.example.test/"),
+                first.get(5, TimeUnit.SECONDS),
+            )
+            assertEquals(
+                RemoteHostApplyResult.Applied("https://second.example.test/"),
+                second.get(5, TimeUnit.SECONDS),
+            )
+            assertEquals("https://second.example.test/", persistence.value)
+            assertEquals("https://second.example.test/", store.currentHost)
+        } finally {
+            persistence.releaseFirstWrite()
+            executor.shutdownNow()
+        }
+    }
+
+    private fun store(persistence: RemoteHostPersistence) = RemoteHostStore(
         defaultHost = defaultHost,
         persistence = persistence,
         validator = RemoteHostValidator(allowHttp = true),
@@ -88,5 +131,37 @@ class RemoteHostStoreTest {
             if (failureOnWrite) error("write failed")
             this.value = value
         }
+    }
+
+    private class BlockingFirstWritePersistence : RemoteHostPersistence {
+        private val writes = AtomicInteger()
+        private val firstWriteEntered = CountDownLatch(1)
+        private val releaseFirstWrite = CountDownLatch(1)
+        private val secondWriteEntered = CountDownLatch(1)
+
+        @Volatile
+        var value: String? = null
+            private set
+
+        override fun read(): String? = null
+
+        override fun write(value: String) {
+            this.value = value
+            when (writes.incrementAndGet()) {
+                1 -> {
+                    firstWriteEntered.countDown()
+                    check(releaseFirstWrite.await(5, TimeUnit.SECONDS)) {
+                        "Timed out waiting to release the first write"
+                    }
+                }
+                2 -> secondWriteEntered.countDown()
+            }
+        }
+
+        fun awaitFirstWrite(): Boolean = firstWriteEntered.await(5, TimeUnit.SECONDS)
+
+        fun awaitSecondWrite(): Boolean = secondWriteEntered.await(1, TimeUnit.SECONDS)
+
+        fun releaseFirstWrite() = releaseFirstWrite.countDown()
     }
 }

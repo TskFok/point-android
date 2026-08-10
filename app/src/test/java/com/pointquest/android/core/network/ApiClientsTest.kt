@@ -64,6 +64,46 @@ class ApiClientsTest {
     }
 
     @Test
+    fun protectedClientReadsDynamicOriginAndKeepsPathBearerAndNoCookieBoundary() =
+        kotlinx.coroutines.runBlocking {
+            val state = SessionState()
+            SessionManager(MemoryStore(), state).install(tokenBundle())
+            var currentHost = "https://first.example.test/"
+            val clients = ApiClients(
+                baseUrl = "https://initial.example.test/",
+                sessionState = state,
+                hostProvider = { currentHost },
+            )
+            val request = Request.Builder()
+                .url("https://initial.example.test/api/v1/points/ledger?page=2")
+                .header("Authorization", "Basic leaked")
+                .header("Cookie", "pq_refresh=leaked")
+                .header("X-CSRF-Token", "leaked")
+                .build()
+
+            val first = intercept(clients.protectedHttpClient, request)
+
+            assertEquals(
+                "https://first.example.test/api/v1/points/ledger?page=2",
+                first.url.toString(),
+            )
+            assertEquals("Bearer access-secret", first.header("Authorization"))
+            assertNull(first.header("Cookie"))
+            assertNull(first.header("X-CSRF-Token"))
+            assertSame(okhttp3.CookieJar.NO_COOKIES, clients.protectedHttpClient.cookieJar)
+
+            currentHost = "https://second.example.test:8443/"
+
+            val second = intercept(clients.protectedHttpClient, request)
+            assertEquals(
+                "https://second.example.test:8443/api/v1/points/ledger?page=2",
+                second.url.toString(),
+            )
+            assertEquals("Bearer access-secret", second.header("Authorization"))
+            assertNull(second.header("Cookie"))
+        }
+
+    @Test
     fun bothBuildersUseExactTimeoutsNoCookiesAndNoLogging() {
         val state = SessionState()
         val clients = listOf(

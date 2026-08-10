@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -12,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -43,6 +45,9 @@ fun LoginScreen(
     onPasswordChange: (String) -> Unit,
     onLogin: () -> Unit,
     onRegister: () -> Unit,
+    hostState: RemoteHostUiState = RemoteHostUiState(activeHost = "", draftHost = ""),
+    onHostChange: (String) -> Unit = {},
+    onApplyHost: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.login_title), modifier = modifier) { padding ->
@@ -58,6 +63,33 @@ fun LoginScreen(
                         AuthMessageTone.Success -> SuccessText
                         AuthMessageTone.Error, null -> ErrorText
                     },
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+            val hostControlsEnabled = !state.submitting && !hostState.applying
+            AuthTextField(
+                value = hostState.draftHost,
+                onValueChange = onHostChange,
+                label = stringResource(R.string.remote_host_label),
+                error = hostState.error?.asString(),
+                enabled = hostControlsEnabled,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                modifier = Modifier.testTag("login_host"),
+            )
+            OutlinedButton(
+                onClick = onApplyHost,
+                enabled = hostControlsEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .testTag("login_host_apply"),
+            ) {
+                Text(stringResource(R.string.remote_host_apply_action))
+            }
+            hostState.message?.let { message ->
+                Text(
+                    text = message.asString(),
+                    color = SuccessText,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }

@@ -34,14 +34,24 @@ class AuthScreenTest {
                         passwordError = UiText.Resource(R.string.auth_error_invalid_credentials),
                         submitting = true,
                     ),
+                    hostState = RemoteHostUiState(
+                        activeHost = "https://api.example.invalid/",
+                        draftHost = "https://api.example.invalid/",
+                    ),
                     onUsernameChange = {},
                     onPasswordChange = {},
                     onLogin = {},
                     onRegister = {},
+                    onHostChange = {},
+                    onApplyHost = {},
                 )
             }
         }
 
+        composeRule.onNodeWithTag("login_host").assertIsDisplayed().assertIsNotEnabled()
+        composeRule.onNodeWithTag("login_host_apply")
+            .assertHeightIsAtLeast(48.dp)
+            .assertIsNotEnabled()
         composeRule.onNodeWithText("用户名或密码不正确").assertIsDisplayed()
         composeRule.onNodeWithTag("login_submit")
             .assertHeightIsAtLeast(48.dp)

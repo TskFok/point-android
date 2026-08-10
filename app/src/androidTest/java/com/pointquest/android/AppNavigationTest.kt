@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertTextContains
 import androidx.navigation.NavHostController
@@ -36,6 +37,10 @@ class AppNavigationTest {
         }
 
         composeRule.onNodeWithText("欢迎回来").assertIsDisplayed()
+        composeRule.onNodeWithTag("login_host").performTextClearance()
+        composeRule.onNodeWithTag("login_host").performTextInput("http://api.example.invalid/")
+        composeRule.onNodeWithTag("login_host_apply").performClick()
+        composeRule.onNodeWithText("服务端地址已应用").assertIsDisplayed()
         composeRule.onNodeWithText("还没有账号？注册账号").performClick()
         composeRule.onNodeWithText("创建学生账号").assertIsDisplayed()
         composeRule.onNodeWithTag("register_username").performTextInput("new_student")

@@ -45,6 +45,8 @@ import com.pointquest.android.feature.auth.AuthEvent
 import com.pointquest.android.feature.auth.AuthUiState
 import com.pointquest.android.feature.auth.AuthViewModel
 import com.pointquest.android.feature.auth.LoginScreen
+import com.pointquest.android.feature.auth.RemoteHostUiState
+import com.pointquest.android.feature.auth.RemoteHostViewModel
 import com.pointquest.android.feature.auth.RegisterScreen
 import com.pointquest.android.feature.home.HomeScreen
 import com.pointquest.android.feature.home.HomeViewModel
@@ -103,10 +105,13 @@ fun AppNavHost(
             if (container == null) {
                 LoginScreen(
                     state = AuthUiState(),
+                    hostState = RemoteHostUiState(activeHost = "", draftHost = ""),
                     onUsernameChange = {},
                     onPasswordChange = {},
                     onLogin = {},
                     onRegister = { navController.navigate(AppRoute.Register) },
+                    onHostChange = {},
+                    onApplyHost = {},
                 )
             } else {
                 val factory = remember(container.authRepository) {
@@ -114,6 +119,13 @@ fun AppNavHost(
                 }
                 val authViewModel: AuthViewModel = viewModel(factory = factory)
                 val state by authViewModel.uiState.collectAsStateWithLifecycle()
+                val remoteHostFactory = remember(container.remoteHostStore) {
+                    ViewModelFactory<RemoteHostViewModel> {
+                        RemoteHostViewModel(container.remoteHostStore)
+                    }
+                }
+                val remoteHostViewModel: RemoteHostViewModel = viewModel(factory = remoteHostFactory)
+                val hostState by remoteHostViewModel.uiState.collectAsStateWithLifecycle()
                 val registeredUsername by entry.savedStateHandle
                     .getStateFlow<String?>(REGISTERED_USERNAME_KEY, null)
                     .collectAsStateWithLifecycle()
@@ -125,10 +137,17 @@ fun AppNavHost(
                 }
                 LoginScreen(
                     state = state,
+                    hostState = hostState,
                     onUsernameChange = authViewModel::updateUsername,
                     onPasswordChange = authViewModel::updatePassword,
-                    onLogin = { authViewModel.login() },
+                    onLogin = {
+                        if (remoteHostViewModel.requireAppliedForLogin()) {
+                            authViewModel.login()
+                        }
+                    },
                     onRegister = { navController.navigate(AppRoute.Register) },
+                    onHostChange = remoteHostViewModel::updateHost,
+                    onApplyHost = { remoteHostViewModel.apply() },
                 )
             }
         }

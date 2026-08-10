@@ -35,6 +35,16 @@
     <string name="auth_error_confirm_password_rejected">确认密码未通过校验</string>
     <string name="auth_error_username_exists">该用户名已被使用</string>
     <string name="auth_password_helper">密码至少 10 位，并同时包含字母和数字</string>
+    <string name="remote_host_label">服务端地址</string>
+    <string name="remote_host_hint">请输入服务端根地址</string>
+    <string name="remote_host_apply_action">应用地址</string>
+    <string name="remote_host_apply_success">服务端地址已应用</string>
+    <string name="remote_host_error_required">请输入服务端地址</string>
+    <string name="remote_host_error_invalid_format">服务端地址格式不正确</string>
+    <string name="remote_host_error_root_path">服务端地址只能使用根路径</string>
+    <string name="remote_host_error_https_required">Release 版本仅支持 HTTPS 服务端地址</string>
+    <string name="remote_host_error_persistence_failed">服务端地址保存失败，请重试</string>
+    <string name="remote_host_apply_before_login">请先应用新的服务端地址</string>
     <string name="register_title">注册</string>
     <string name="register_welcome">创建学生账号</string>
     <string name="home_title">首页</string>

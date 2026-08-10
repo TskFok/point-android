@@ -12,7 +12,11 @@ data class QuestionQueueItem(
     val submissionOptionId: String? = null,
     val result: AnswerResult? = null,
     val submitError: UiText? = null,
-)
+    val alreadyAnswered: Boolean = false,
+) {
+    val answered: Boolean
+        get() = result != null || alreadyAnswered
+}
 
 data class QuestionUiState(
     val mode: PracticeMode,
@@ -38,7 +42,7 @@ data class QuestionUiState(
         get() = currentItem?.result
 
     val submitted: Boolean
-        get() = result != null
+        get() = currentItem?.answered == true
 
     val hasPrevious: Boolean
         get() = currentIndex > 0
@@ -55,12 +59,17 @@ data class QuestionUiState(
             currentItem?.submissionOptionId == null
 
     val submitEnabled: Boolean
-        get() = question != null &&
-            !loading &&
-            !loadingNext &&
-            !submitting &&
-            !submitted &&
-            (selectedOptionId != null || currentItem?.submissionOptionId != null)
+        get() {
+            val item = currentItem ?: return false
+            val firstSubmitAllowed = item.submissionOptionId == null && item.selectedOptionId != null
+            val retryAllowed = item.submissionOptionId != null && item.submitError != null
+            return question != null &&
+                !loading &&
+                !loadingNext &&
+                !submitting &&
+                !item.answered &&
+                (firstSubmitAllowed || retryAllowed)
+        }
 }
 
 sealed interface QuestionEvent {

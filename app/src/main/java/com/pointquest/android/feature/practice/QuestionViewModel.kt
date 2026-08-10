@@ -270,7 +270,9 @@ class QuestionViewModel(
         when {
             mode == PracticeMode.FIRST && result.error.code == QUESTION_ALREADY_ANSWERED -> {
                 if (appDataSession != null) appDataSync?.recordPracticeChanged(appDataSession)
-                mutableUiState.value = mutableUiState.value.copy(submitting = false)
+                updateCurrentItem(mutableUiState.value.copy(submitting = false)) { current ->
+                    current.copy(alreadyAnswered = true, submitError = null)
+                }
                 loadTailQuestion(activeLanguage)
             }
             mode == PracticeMode.WRONG && result.error.code == QUESTION_ALREADY_MASTERED -> {

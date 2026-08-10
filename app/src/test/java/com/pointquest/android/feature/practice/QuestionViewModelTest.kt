@@ -382,6 +382,30 @@ class QuestionViewModelTest {
     }
 
     @Test
+    fun alreadyAnsweredHistoryItemCannotBeSubmittedAgain() = runBlocking {
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(successQuestion("q1"), successQuestion("q2")),
+            firstAnswerResults = arrayDequeOf(
+                failure("QUESTION_ALREADY_ANSWERED"),
+                AppResult.Success(sampleAnswer(correct = true, selectedOptionId = "o1")),
+            ),
+        )
+        val viewModel = firstViewModel(repository)
+        viewModel.loadFirstQuestion().join()
+        viewModel.selectOption("o1")
+        viewModel.submit()?.join()
+        viewModel.loadJob?.join()
+
+        viewModel.goPrevious()
+        val duplicateSubmit = viewModel.submit()
+        duplicateSubmit?.join()
+
+        assertNull(duplicateSubmit)
+        assertEquals("q1", viewModel.uiState.value.question?.id)
+        assertEquals(1, repository.firstAnswerCalls.size)
+    }
+
+    @Test
     fun noUnansweredQuestionsCompletesPractice() = runBlocking {
         val repository = FakePracticeRepository(
             nextResults = loadResults(failure("NO_UNANSWERED_QUESTIONS")),

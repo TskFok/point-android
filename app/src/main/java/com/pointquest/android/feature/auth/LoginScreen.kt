@@ -66,19 +66,19 @@ fun LoginScreen(
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
-            val hostControlsEnabled = !state.submitting && !hostState.applying
+            val controlsEnabled = !state.submitting && !hostState.applying
             AuthTextField(
                 value = hostState.draftHost,
                 onValueChange = onHostChange,
                 label = stringResource(R.string.remote_host_label),
                 error = hostState.error?.asString(),
-                enabled = hostControlsEnabled,
+                enabled = controlsEnabled,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 modifier = Modifier.testTag("login_host"),
             )
             OutlinedButton(
                 onClick = onApplyHost,
-                enabled = hostControlsEnabled,
+                enabled = controlsEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
@@ -98,7 +98,7 @@ fun LoginScreen(
                 onValueChange = onUsernameChange,
                 label = stringResource(R.string.auth_username),
                 error = state.usernameError?.asString(),
-                enabled = !state.submitting,
+                enabled = controlsEnabled,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 modifier = Modifier.testTag("login_username"),
             )
@@ -107,7 +107,7 @@ fun LoginScreen(
                 onValueChange = onPasswordChange,
                 label = stringResource(R.string.auth_password),
                 error = state.passwordError?.asString(),
-                enabled = !state.submitting,
+                enabled = controlsEnabled,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done,
@@ -123,7 +123,7 @@ fun LoginScreen(
                     stringResource(R.string.auth_login_action)
                 },
                 onClick = onLogin,
-                enabled = !state.submitting,
+                enabled = controlsEnabled,
                 modifier = Modifier.testTag("login_submit"),
             )
             if (state.submitting) {
@@ -134,7 +134,7 @@ fun LoginScreen(
             }
             TextButton(
                 onClick = onRegister,
-                enabled = !state.submitting,
+                enabled = controlsEnabled,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp),

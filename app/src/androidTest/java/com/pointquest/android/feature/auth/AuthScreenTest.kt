@@ -63,6 +63,36 @@ class AuthScreenTest {
     }
 
     @Test
+    fun loginFormIsDisabledWhileHostApplicationIsInProgress() {
+        composeRule.setContent {
+            PointQuestTheme {
+                LoginScreen(
+                    state = AuthUiState(
+                        username = "student",
+                        password = "secret-password1",
+                    ),
+                    hostState = RemoteHostUiState(
+                        activeHost = "https://api.example.invalid/",
+                        draftHost = "https://api.example.invalid/",
+                        applying = true,
+                    ),
+                    onUsernameChange = {},
+                    onPasswordChange = {},
+                    onLogin = {},
+                    onRegister = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("login_host").assertIsNotEnabled()
+        composeRule.onNodeWithTag("login_host_apply").assertIsNotEnabled()
+        composeRule.onNodeWithTag("login_username").assertIsNotEnabled()
+        composeRule.onNodeWithTag("login_password").assertIsNotEnabled()
+        composeRule.onNodeWithTag("login_submit").assertIsNotEnabled()
+        composeRule.onNodeWithText("还没有账号？注册账号").assertIsNotEnabled()
+    }
+
+    @Test
     fun registerPasswordFieldsUsePasswordSemanticsAndPrimaryTargetIsLargeEnough() {
         composeRule.setContent {
             PointQuestTheme {

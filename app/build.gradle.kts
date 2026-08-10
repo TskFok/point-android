@@ -146,25 +146,8 @@ val verifyNetworkSecurityConfig by tasks.registering {
             .file("intermediates/packaged_res/release/packageReleaseResources/xml/network_security_config.xml")
             .get()
             .asFile
-        check(cleartextTrafficPermission(debugConfig) == "false") {
-            "Debug must prohibit cleartext traffic by default."
-        }
-        val debugDocument = parse(debugConfig)
-        val domainConfigs = debugDocument.getElementsByTagName("domain-config")
-        check(domainConfigs.length == 1) {
-            "Debug must define exactly one cleartext domain override."
-        }
-        val domainConfig = domainConfigs.item(0)
-        check(domainConfig.attributes.getNamedItem("cleartextTrafficPermitted")?.nodeValue == "true") {
-            "Debug 10.0.2.2 override must permit cleartext traffic."
-        }
-        val domains = debugDocument.getElementsByTagName("domain")
-        check(
-            domains.length == 1 &&
-                domains.item(0).textContent.trim() == "10.0.2.2" &&
-                domains.item(0).attributes.getNamedItem("includeSubdomains")?.nodeValue == "false"
-        ) {
-            "Debug cleartext traffic must be limited to exactly 10.0.2.2 without subdomains."
+        check(cleartextTrafficPermission(debugConfig) == "true") {
+            "Debug must permit cleartext traffic for developer-configured hosts."
         }
         check(cleartextTrafficPermission(releaseConfig) == "false") {
             "Release network security config must prohibit cleartext traffic."

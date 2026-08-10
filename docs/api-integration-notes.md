@@ -1,6 +1,6 @@
 # Android API 接入说明
 
-本文描述当前 Android 实现的真实契约和安全边界。API 根地址是 origin 根路径，例如 `https://api.example.invalid/`；OpenAPI 生成的方法包含 `/api/v1`。本文出现的 `example.invalid` 是保留的无效域名，仅用于格式或构建示例，不能用于生产。
+本文描述当前 Android 实现的真实契约和安全边界。登录页的 Host 是 API origin 根路径，例如 `https://api.example.invalid/`；不得包含 `/api/v1`，因为 OpenAPI 生成的方法会自行追加该路径。本文出现的 `example.invalid` 是保留的无效域名，仅用于格式或构建示例，不能用于生产。
 
 ## 契约生成与调用分层
 
@@ -115,15 +115,16 @@ Access Token 只存在 `SessionState` 的进程内活动会话中。密码、Acc
 
 ## 商品图片
 
-客户端不接受任意图片 URL。`ProductImageUrlFactory` 只接收严格的小写 `products/<UUID>.(jpg|png|webp)` key，并仅在配置为无用户名、密码、查询、片段或额外路径的 HTTP(S) 根 origin 时，生成同 origin 的 `/uploads/products/<UUID>.<扩展名>`。
+客户端不接受任意图片 URL。`ProductImageUrlFactory` 只接收严格的小写 `products/<UUID>.(jpg|png|webp)` key，并仅在配置为无用户名、密码、查询、片段或额外路径的 HTTP(S) 根 origin 时，生成同 origin 的 `/uploads/products/<UUID>.<扩展名>`。图片 origin 始终跟随登录页当前应用的 API Host；Host 更新后，下一次商品图片请求使用新的同源地址。
 
 无效 key、无效根地址或路径解析异常均返回 `null`，UI 使用应用内占位图和文字 `contentDescription`。合法同源 URL 由 Coil 3 的 OkHttp 网络 fetcher 加载，并复用应用受控的公开 `OkHttpClient`；网络或解码失败才使用错误占位图。Release 图片 origin 从已校验的 HTTPS API 根地址派生；不得让服务端字段绕过 factory 直接交给 Coil。
 
 ## 网络安全配置
 
 - 主清单显式声明 `android.permission.INTERNET`。
-- Debug 网络安全配置默认禁止明文，只允许精确主机 `10.0.2.2`，且不包含子域名。
-- Release 网络安全配置始终禁止明文；Release API 参数必须是带尾部 `/` 的纯 HTTPS 根 origin，不允许子路径、用户信息、查询参数或片段。
+- Debug 登录页允许配置任意合法的开发 HTTP 或 HTTPS 根 origin，Debug 网络安全配置相应允许开发环境明文流量。
+- Release 登录页只接受 HTTPS Host；Release 网络安全配置始终禁止明文，Release API 参数也必须是纯 HTTPS 根 origin，不允许子路径（包括 `/api/v1`）、用户信息、查询参数或片段。
+- 主 Manifest 的 `android:usesCleartextTraffic="false"` 保持不变；Debug 放行不改变 Release 安全边界。
 - `./gradlew verifyReleaseApiBaseUrlValidation verifyNetworkSecurityConfig -PpointApiBaseUrl=https://api.example.invalid/` 会自动验证以上边界。
 
 ## 日志与排障

@@ -32,7 +32,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-API 默认监听 `http://localhost:3000`，Swagger UI 位于 `http://localhost:3000/api/docs`。Android 模拟器不能把宿主机当作自身的 `localhost`，因此 Debug 构建使用根地址 `http://10.0.2.2:3000/`；生成接口会自行追加 `/api/v1/...`，不要把 `/api/v1` 写入根地址。
+API 默认监听 `http://localhost:3000`，Swagger UI 位于 `http://localhost:3000/api/docs`。Android 模拟器不能把宿主机当作自身的 `localhost`，因此 Debug 构建默认使用根地址 `http://10.0.2.2:3000/`。也可以在登录页把 Host 改为任意合法的开发 HTTP 根地址（例如同一局域网中的服务），应用后下一次登录、注册和商品图片请求会使用新 Host。Host 只能填写服务根 origin，生成接口会自行追加 `/api/v1/...`，不要把 `/api/v1` 写入 Host。
 
 ## OpenAPI 契约
 
@@ -105,9 +105,10 @@ adb devices -l
 ## 网络配置
 
 - 主清单显式声明 `android.permission.INTERNET`；`verifyNetworkSecurityConfig` 会同时检查 Debug/Release 合并清单。
-- Debug：固定根地址 `http://10.0.2.2:3000/`。默认仍禁止明文流量，只对精确主机 `10.0.2.2` 开放，不包含子域名或其他局域网地址。
-- Release：必须显式传入 `-PpointApiBaseUrl=https://api.example.invalid/`；值必须是带尾部 `/` 的纯 HTTPS 服务根 origin。子路径（包括 `/api/v1`）、用户信息、查询参数和片段都会使构建失败。
-- Release 主清单禁止明文流量；图片根地址从 Release API 根 origin 派生。
+- Debug：默认根地址为 `http://10.0.2.2:3000/`，登录页允许配置任意合法的开发 HTTP 或 HTTPS 根 origin；Debug 网络安全配置允许开发环境明文流量。
+- Release：构建时必须显式传入 `-PpointApiBaseUrl=https://api.example.invalid/`，登录页 Host 也只接受 HTTPS。值必须是纯服务根 origin；子路径（包括 `/api/v1`）、用户信息、查询参数和片段均不允许。
+- 主 Manifest 和 Release 网络安全配置继续禁止明文流量；Debug 的 HTTP 放行不会削弱 Release 边界。
+- 商品图片始终跟随当前 API Host 的 origin，不接受独立或跨源图片地址。
 - `example.invalid`、`api.example.invalid` 等示例域名仅作格式或构建验证，严禁用于生产。
 
 首页、个人中心和商店通过进程内失效信号同步答题/兑换结果；首页和商店收到信号后会 online-first 重新拉取。商品列表支持下拉刷新，失败时保留当前内容并给出非致命提示。

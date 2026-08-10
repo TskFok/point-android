@@ -5,24 +5,29 @@ import java.util.UUID
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-class ProductImageUrlFactory(
-    imageBaseUrl: String = BuildConfig.IMAGE_BASE_URL,
+class ProductImageUrlFactory private constructor(
+    private val imageBaseUrlProvider: () -> String,
+    @Suppress("UNUSED_PARAMETER") constructorMarker: Unit,
 ) {
-    private val baseUrl: HttpUrl? = imageBaseUrl
-        .takeIf(ROOT_HTTP_ORIGIN::matches)
-        ?.toHttpUrlOrNull()
-        ?.takeIf(::isRootHttpOrigin)
+    constructor(imageBaseUrl: String = BuildConfig.IMAGE_BASE_URL) : this({ imageBaseUrl }, Unit)
+
+    constructor(imageBaseUrlProvider: () -> String) : this(imageBaseUrlProvider, Unit)
 
     fun urlOrNull(imageKey: String): String? {
         val match = PRODUCT_IMAGE_KEY.matchEntire(imageKey) ?: return null
         val uuid = UUID.fromString(match.groupValues[1])
         if (uuid.toString() != match.groupValues[1]) return null
 
-        return baseUrl
+        return currentBaseUrlOrNull()
             ?.resolve("uploads/$imageKey")
             ?.takeIf { it.encodedPath == "/uploads/$imageKey" && it.query == null && it.fragment == null }
             ?.toString()
     }
+
+    private fun currentBaseUrlOrNull(): HttpUrl? = imageBaseUrlProvider()
+        .takeIf(ROOT_HTTP_ORIGIN::matches)
+        ?.toHttpUrlOrNull()
+        ?.takeIf(::isRootHttpOrigin)
 
     private fun isRootHttpOrigin(url: HttpUrl): Boolean =
         url.scheme in setOf("http", "https") &&

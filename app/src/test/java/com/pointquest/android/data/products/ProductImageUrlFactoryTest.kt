@@ -20,6 +20,25 @@ class ProductImageUrlFactoryTest {
     }
 
     @Test
+    fun readsTheCurrentImageBaseUrlProviderForEachImageUrl() {
+        var currentImageBaseUrl = "https://images-first.example.test/"
+        val factory = ProductImageUrlFactory { currentImageBaseUrl }
+
+        assertEquals(
+            "https://images-first.example.test/uploads/products/550e8400-e29b-41d4-a716-446655440000.png",
+            factory.urlOrNull(key),
+        )
+
+        currentImageBaseUrl = "https://images-second.example.test/"
+
+        assertEquals(
+            "https://images-second.example.test/uploads/products/550e8400-e29b-41d4-a716-446655440000.png",
+            factory.urlOrNull(key),
+        )
+        assertNull(factory.urlOrNull("products/not-a-uuid.png"))
+    }
+
+    @Test
     fun rejectsAbsoluteTraversalEncodedOrNonCanonicalImageKeys() {
         val factory = ProductImageUrlFactory("https://images.example.test/")
         val invalidKeys = listOf(

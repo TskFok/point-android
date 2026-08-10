@@ -6,6 +6,7 @@ import com.pointquest.android.generated.infrastructure.ApiClient
 import com.pointquest.android.generated.infrastructure.Serializer
 import java.util.concurrent.TimeUnit
 import okhttp3.CookieJar
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -13,9 +14,14 @@ import okhttp3.Response
 class ApiClients(
     baseUrl: String,
     sessionState: SessionState,
+    hostProvider: () -> String = { baseUrl },
 ) {
-    val publicHttpClient: OkHttpClient = publicBuilder().build()
-    val protectedHttpClient: OkHttpClient = protectedBuilder(sessionState).build()
+    val publicHttpClient: OkHttpClient = publicBuilder()
+        .addInterceptor(RemoteHostInterceptor(hostProvider))
+        .build()
+    val protectedHttpClient: OkHttpClient = protectedBuilder(sessionState)
+        .addInterceptor(RemoteHostInterceptor(hostProvider))
+        .build()
     val publicApi: DefaultApi = defaultApi(baseUrl, publicHttpClient)
     val protectedApi: DefaultApi = defaultApi(baseUrl, protectedHttpClient)
 
@@ -44,6 +50,26 @@ class ApiClients(
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
             .callTimeout(30, TimeUnit.SECONDS)
+    }
+}
+
+private class RemoteHostInterceptor(
+    private val hostProvider: () -> String,
+) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val origin = hostProvider().toHttpUrl()
+        val request = chain.request()
+        return chain.proceed(
+            request.newBuilder()
+                .url(
+                    request.url.newBuilder()
+                        .scheme(origin.scheme)
+                        .host(origin.host)
+                        .port(origin.port)
+                        .build(),
+                )
+                .build(),
+        )
     }
 }
 

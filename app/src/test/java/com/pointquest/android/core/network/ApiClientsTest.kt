@@ -32,10 +32,35 @@ class ApiClientsTest {
         val clients = ApiClients("https://example.test/", SessionState())
 
         assertNotSame(clients.publicHttpClient, clients.protectedHttpClient)
-        assertEquals(1, clients.publicHttpClient.interceptors.size)
-        assertEquals(1, clients.protectedHttpClient.interceptors.size)
-        assertFalse(clients.publicHttpClient.interceptors.single() is BearerInterceptor)
-        assertTrue(clients.protectedHttpClient.interceptors.single() is BearerInterceptor)
+        assertEquals(2, clients.publicHttpClient.interceptors.size)
+        assertEquals(2, clients.protectedHttpClient.interceptors.size)
+        assertFalse(clients.publicHttpClient.interceptors.any { it is BearerInterceptor })
+        assertTrue(clients.protectedHttpClient.interceptors.any { it is BearerInterceptor })
+    }
+
+    @Test
+    fun constructedClientsReadTheCurrentHostProviderWithoutChangingRequestPath() {
+        var currentHost = "https://first.example.test/"
+        val clients = ApiClients(
+            baseUrl = "https://initial.example.test/",
+            sessionState = SessionState(),
+            hostProvider = { currentHost },
+        )
+        val request = Request.Builder()
+            .url("https://initial.example.test/api/v1/auth/token")
+            .build()
+
+        assertEquals(
+            "https://first.example.test/api/v1/auth/token",
+            intercept(clients.publicHttpClient, request).url.toString(),
+        )
+
+        currentHost = "https://second.example.test:8443/"
+
+        assertEquals(
+            "https://second.example.test:8443/api/v1/auth/token",
+            intercept(clients.publicHttpClient, request).url.toString(),
+        )
     }
 
     @Test
@@ -102,6 +127,11 @@ class ApiClientsTest {
         .header("Cookie", "pq_refresh=leaked")
         .header("X-CSRF-Token", "leaked")
         .build()
+
+    private fun intercept(client: OkHttpClient, request: Request): Request =
+        client.interceptors.fold(request) { currentRequest, interceptor ->
+            RecordingChain(currentRequest).also(interceptor::intercept).proceededRequest!!
+        }
 
     private class MemoryStore : SessionStore {
         private var value: StoredRefreshSession? = null

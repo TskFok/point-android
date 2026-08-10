@@ -28,7 +28,7 @@ class ShopRefreshSnapshot internal constructor(
     internal val revision: Long,
 )
 
-/** Process-local synchronization scoped to the current authenticated session generation. */
+/** Process-local synchronization scoped to the stable authenticated login session identity. */
 class AppDataSync(sessionState: SessionState) {
     private val mutableState = MutableStateFlow(AppDataSyncState(session = null))
     val state: StateFlow<AppDataSyncState> = mutableState.asStateFlow()

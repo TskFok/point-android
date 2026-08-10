@@ -370,6 +370,109 @@ class SessionManagerTest {
     }
 
     @Test
+    fun observerFailureDuringClearMustStillErasePersistedRefreshSession() = runBlocking {
+        val observerFailure = IllegalStateException("observer failed")
+        val state = SessionState()
+        val store = FakeSessionStore()
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle())
+        state.observeActiveSession { session ->
+            if (session == null) throw observerFailure
+        }
+
+        try {
+            manager.clear()
+            fail("observer failure should be rethrown after persistent cleanup")
+        } catch (actual: IllegalStateException) {
+            assertSame(observerFailure, actual)
+        }
+
+        assertNull(state.active.value)
+        assertEquals(SessionStatus.SignedOut, state.status.value)
+        assertTrue(store.clearCalled)
+        assertNull(store.lastWritten)
+    }
+
+    @Test
+    fun observerFailureDuringClearSuppressesStoreFailureAfterAttemptingBothLayers() = runBlocking {
+        val observerFailure = IllegalStateException("observer failed")
+        val storeFailure = IOException("store clear failed")
+        val state = SessionState()
+        val store = FakeSessionStore(clearError = storeFailure)
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle())
+        state.observeActiveSession { session ->
+            if (session == null) throw observerFailure
+        }
+
+        try {
+            manager.clear()
+            fail("observer failure should remain primary")
+        } catch (actual: IllegalStateException) {
+            assertSame(observerFailure, actual)
+            assertEquals(listOf(storeFailure), actual.suppressed.toList())
+        }
+
+        assertNull(state.active.value)
+        assertEquals(SessionStatus.SignedOut, state.status.value)
+        assertTrue(store.clearCalled)
+    }
+
+    @Test
+    fun storeCancellationDuringClearTakesPriorityAndSuppressesObserverFailure() = runBlocking {
+        val observerFailure = IllegalStateException("observer failed")
+        val cancellation = CancellationException("store clear cancelled")
+        val state = SessionState()
+        val store = FakeSessionStore(clearError = cancellation)
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle())
+        state.observeActiveSession { session ->
+            if (session == null) throw observerFailure
+        }
+
+        try {
+            manager.clear()
+            fail("store cancellation should be rethrown")
+        } catch (actual: CancellationException) {
+            assertSame(cancellation, actual)
+            assertEquals(listOf(observerFailure), actual.suppressed.toList())
+        }
+
+        assertNull(state.active.value)
+        assertEquals(SessionStatus.SignedOut, state.status.value)
+        assertTrue(store.clearCalled)
+    }
+
+    @Test
+    fun cleanupFailuresCannotReplaceOriginalReadFailure() = runBlocking {
+        val readFailure = IOException("store read failed")
+        val observerFailure = IllegalStateException("observer failed")
+        val storeCleanupFailure = IOException("store clear failed")
+        val state = SessionState()
+        val store = FakeSessionStore()
+        val manager = SessionManager(store, state)
+        manager.install(sampleTokenBundle())
+        state.observeActiveSession { session ->
+            if (session == null) throw observerFailure
+        }
+        store.readError = readFailure
+        store.clearError = storeCleanupFailure
+
+        val result = manager.acquireRefreshLease()
+
+        val error = (result as AppResult.Failure).error
+        assertEquals("SESSION_STORE_READ_FAILED", error.code)
+        assertSame(readFailure, error.cause)
+        assertEquals(
+            listOf(observerFailure, storeCleanupFailure),
+            readFailure.suppressed.toList(),
+        )
+        assertNull(state.active.value)
+        assertEquals(SessionStatus.SignedOut, state.status.value)
+        assertTrue(store.clearCalled)
+    }
+
+    @Test
     fun cancellationDuringInstallClearsPublishedAndPersistedSessionsBeforeRethrow() = runBlocking {
         val cancellation = CancellationException("cancelled")
         val state = SessionState()

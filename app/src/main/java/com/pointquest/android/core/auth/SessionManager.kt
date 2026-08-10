@@ -50,10 +50,10 @@ class SessionManager(
                 },
             )
         } catch (cancellation: CancellationException) {
-            cleanupLockedPreservingFailure()
+            cleanupLockedPreservingFailure(cancellation)
             throw cancellation
         } catch (failure: Exception) {
-            cleanupLockedPreservingFailure()
+            cleanupLockedPreservingFailure(failure)
             AppResult.Failure(sessionError(SESSION_STORE_READ_FAILED, failure))
         }
     }
@@ -98,14 +98,25 @@ class SessionManager(
     }
 
     suspend fun clear(): AppResult<Unit> = mutex.withLock {
-        invalidateLocked()
-        try {
-            store.clear()
-            AppResult.Success(Unit)
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (failure: Exception) {
-            AppResult.Failure(sessionError(SESSION_STORE_CLEAR_FAILED, failure))
+        val observerFailure = invalidateLockedCapturingFailure()
+        val storeFailure = clearStoreCapturingFailure()
+        when {
+            observerFailure is CancellationException -> {
+                observerFailure.suppressDistinct(storeFailure)
+                throw observerFailure
+            }
+            storeFailure is CancellationException -> {
+                storeFailure.suppressDistinct(observerFailure)
+                throw storeFailure
+            }
+            observerFailure != null -> {
+                observerFailure.suppressDistinct(storeFailure)
+                throw observerFailure
+            }
+            storeFailure is Exception ->
+                AppResult.Failure(sessionError(SESSION_STORE_CLEAR_FAILED, storeFailure))
+            storeFailure != null -> throw storeFailure
+            else -> AppResult.Success(Unit)
         }
     }
 
@@ -121,10 +132,10 @@ class SessionManager(
         try {
             store.write(storedSession)
         } catch (cancellation: CancellationException) {
-            cleanupLockedPreservingFailure()
+            cleanupLockedPreservingFailure(cancellation)
             throw cancellation
         } catch (failure: Exception) {
-            cleanupLockedPreservingFailure()
+            cleanupLockedPreservingFailure(failure)
             return AppResult.Failure(sessionError(SESSION_STORE_WRITE_FAILED, failure))
         }
 
@@ -148,21 +159,37 @@ class SessionManager(
         return AppResult.Success(activeSession)
     }
 
-    private suspend fun cleanupLockedPreservingFailure() {
-        invalidateLocked()
-        withContext(NonCancellable) {
-            try {
-                store.clear()
-            } catch (_: Throwable) {
-                // Best effort: cleanup must never replace the original failure.
-            }
+    private suspend fun cleanupLockedPreservingFailure(primaryFailure: Throwable? = null) {
+        val observerFailure = invalidateLockedCapturingFailure()
+        val storeFailure = clearStoreCapturingFailure()
+        primaryFailure?.suppressDistinct(observerFailure)
+        primaryFailure?.suppressDistinct(storeFailure)
+    }
+
+    private fun invalidateLockedCapturingFailure(): Throwable? {
+        epoch += 1
+        refreshMaterialValid = false
+        return try {
+            state.clear()
+            null
+        } catch (failure: Throwable) {
+            failure
         }
     }
 
-    private fun invalidateLocked() {
-        epoch += 1
-        refreshMaterialValid = false
-        state.clear()
+    private suspend fun clearStoreCapturingFailure(): Throwable? = withContext(NonCancellable) {
+        try {
+            store.clear()
+            null
+        } catch (failure: Throwable) {
+            failure
+        }
+    }
+
+    private fun Throwable.suppressDistinct(failure: Throwable?) {
+        if (failure != null && failure !== this && suppressed.none { it === failure }) {
+            addSuppressed(failure)
+        }
     }
 
     private fun sessionError(code: String, cause: Throwable) = AppError(

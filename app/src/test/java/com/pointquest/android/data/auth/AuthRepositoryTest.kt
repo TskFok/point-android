@@ -3,6 +3,7 @@ package com.pointquest.android.data.auth
 import com.pointquest.android.core.auth.RefreshCoordinator
 import com.pointquest.android.core.auth.SessionManager
 import com.pointquest.android.core.auth.SessionState
+import com.pointquest.android.core.auth.SessionStatus
 import com.pointquest.android.core.auth.SessionStore
 import com.pointquest.android.core.auth.StoredRefreshSession
 import com.pointquest.android.core.model.TokenBundle
@@ -156,6 +157,21 @@ class AuthRepositoryTest {
             assertNull(fixture.state.active.value)
             assertNull(fixture.store.value)
         }
+    }
+
+    @Test
+    fun logoutObserverFailureStillErasesPersistedRefreshSession() = runBlocking {
+        val fixture = fixture()
+        fixture.manager.install(studentBundle())
+        fixture.state.observeActiveSession { session ->
+            if (session == null) throw IllegalStateException("observer failed")
+        }
+
+        fixture.repository.logout()
+
+        assertNull(fixture.state.active.value)
+        assertEquals(SessionStatus.SignedOut, fixture.state.status.value)
+        assertNull(fixture.store.value)
     }
 
     private fun fixture(

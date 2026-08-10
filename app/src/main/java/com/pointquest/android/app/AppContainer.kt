@@ -9,7 +9,10 @@ import com.pointquest.android.core.auth.SessionManager
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.network.ApiClients
 import com.pointquest.android.core.network.AuthorizedCallExecutor
+import com.pointquest.android.core.network.RemoteHostStore
+import com.pointquest.android.core.network.RemoteHostValidator
 import com.pointquest.android.core.network.RetryExecutor
+import com.pointquest.android.core.network.SharedPreferencesRemoteHostPersistence
 import com.pointquest.android.data.auth.AuthRepository
 import com.pointquest.android.data.auth.DefaultAuthRepository
 import com.pointquest.android.data.gateway.GeneratedPublicAuthGateway
@@ -30,7 +33,6 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 class AppContainer(
     context: Context,
     apiBaseUrl: String = BuildConfig.API_BASE_URL,
-    imageBaseUrl: String = BuildConfig.IMAGE_BASE_URL,
 ) : AppDependencies {
     private val applicationContext = context.applicationContext
 
@@ -40,8 +42,13 @@ class AppContainer(
     override val sessionState = SessionState()
     private val sessionStore = SecureSessionStore(applicationContext, moshi = moshi)
     private val sessionManager = SessionManager(sessionStore, sessionState)
+    override val remoteHostStore = RemoteHostStore(
+        defaultHost = apiBaseUrl,
+        persistence = SharedPreferencesRemoteHostPersistence(applicationContext),
+        validator = RemoteHostValidator(BuildConfig.DEBUG),
+    )
 
-    private val apiClients = ApiClients(apiBaseUrl, sessionState)
+    private val apiClients = ApiClients(apiBaseUrl, sessionState, remoteHostStore::currentHost)
     private val publicAuthGateway = GeneratedPublicAuthGateway(apiClients.publicApi)
     private val studentGateway = GeneratedStudentGateway(apiClients.protectedApi)
     private val refreshCoordinator = RefreshCoordinator(publicAuthGateway, sessionManager, sessionState)
@@ -78,5 +85,5 @@ class AppContainer(
         authorizedCallExecutor,
         retryExecutor,
     )
-    override val productImageUrlFactory = ProductImageUrlFactory(imageBaseUrl)
+    override val productImageUrlFactory = ProductImageUrlFactory(remoteHostStore::currentHost)
 }

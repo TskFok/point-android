@@ -26,6 +26,9 @@ import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.network.AppResult
+import com.pointquest.android.core.network.RemoteHostPersistence
+import com.pointquest.android.core.network.RemoteHostStore
+import com.pointquest.android.core.network.RemoteHostValidator
 import com.pointquest.android.core.ui.theme.PointQuestTheme
 import com.pointquest.android.data.auth.AuthRepository
 import com.pointquest.android.data.orders.OrdersRepository
@@ -87,7 +90,21 @@ internal class FakeAppDependencies(
     }
     override val appDataSync = AppDataSync(sessionState)
     override val practiceDraftStore = PracticeDraftStore()
-    override val productImageUrlFactory = ProductImageUrlFactory("https://images.example.invalid/")
+    private val remoteHostPersistence = object : RemoteHostPersistence {
+        private var host: String? = null
+
+        override fun read(): String? = host
+
+        override fun write(value: String) {
+            host = value
+        }
+    }
+    override val remoteHostStore = RemoteHostStore(
+        defaultHost = "https://images.example.invalid/",
+        persistence = remoteHostPersistence,
+        validator = RemoteHostValidator(allowHttp = true),
+    )
+    override val productImageUrlFactory = ProductImageUrlFactory(remoteHostStore::currentHost)
 
     override val authRepository: AuthRepository = object : AuthRepository {
         override suspend fun register(username: String, password: String) =

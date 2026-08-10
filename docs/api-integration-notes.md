@@ -1,6 +1,6 @@
 # Android API 接入说明
 
-本文描述当前 Android 实现的真实契约和安全边界。登录页的 Host 是 API origin 根路径，例如 `https://api.example.invalid/`；不得包含 `/api/v1`，因为 OpenAPI 生成的方法会自行追加该路径。本文出现的 `example.invalid` 是保留的无效域名，仅用于格式或构建示例，不能用于生产。
+本文描述当前 Android 实现的真实契约和安全边界。登录页的运行时 Host 是 API origin 根路径，例如 `https://api.example.invalid/`；输入可省略尾部 `/`，校验器应用时会自动补齐。Host 不得包含 `/api/v1`，因为 OpenAPI 生成的方法会自行追加该路径。Release 构建参数 `pointApiBaseUrl` 与运行时输入不同，必须显式自带尾部 `/`，否则构建失败。本文出现的 `example.invalid` 是保留的无效域名，仅用于格式或构建示例，不能用于生产。
 
 ## 契约生成与调用分层
 
@@ -123,7 +123,7 @@ Access Token 只存在 `SessionState` 的进程内活动会话中。密码、Acc
 
 - 主清单显式声明 `android.permission.INTERNET`。
 - Debug 登录页允许配置任意合法的开发 HTTP 或 HTTPS 根 origin，Debug 网络安全配置相应允许开发环境明文流量。
-- Release 登录页只接受 HTTPS Host；Release 网络安全配置始终禁止明文，Release API 参数也必须是纯 HTTPS 根 origin，不允许子路径（包括 `/api/v1`）、用户信息、查询参数或片段。
+- Release 登录页只接受 HTTPS Host，运行时校验器可自动补齐尾部 `/`；Release 网络安全配置始终禁止明文，Release 构建参数 `pointApiBaseUrl` 必须是自带尾部 `/` 的纯 HTTPS 根 origin，不允许子路径（包括 `/api/v1`）、用户信息、查询参数或片段。
 - 主 Manifest 的 `android:usesCleartextTraffic="false"` 保持不变；Debug 放行不改变 Release 安全边界。
 - `./gradlew verifyReleaseApiBaseUrlValidation verifyNetworkSecurityConfig -PpointApiBaseUrl=https://api.example.invalid/` 会自动验证以上边界。
 

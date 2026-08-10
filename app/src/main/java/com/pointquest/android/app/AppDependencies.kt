@@ -2,6 +2,7 @@ package com.pointquest.android.app
 
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.network.RemoteHostStore
+import com.pointquest.android.data.preferences.LearnerLanguageStore
 import com.pointquest.android.data.auth.AuthRepository
 import com.pointquest.android.data.orders.OrdersRepository
 import com.pointquest.android.data.points.PointsRepository
@@ -13,6 +14,7 @@ import com.pointquest.android.feature.practice.PracticeDraftStore
 interface AppDependencies {
     val sessionState: SessionState
     val remoteHostStore: RemoteHostStore
+    val learnerLanguageStore: LearnerLanguageStore
     val appDataSync: AppDataSync
     val authRepository: AuthRepository
     val practiceRepository: PracticeRepository

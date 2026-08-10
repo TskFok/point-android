@@ -19,6 +19,9 @@ import com.pointquest.android.data.gateway.GeneratedPublicAuthGateway
 import com.pointquest.android.data.gateway.GeneratedStudentGateway
 import com.pointquest.android.data.orders.DefaultOrdersRepository
 import com.pointquest.android.data.orders.OrdersRepository
+import com.pointquest.android.data.preferences.DefaultLearnerLanguageStore
+import com.pointquest.android.data.preferences.LearnerLanguageStore
+import com.pointquest.android.data.preferences.SharedPreferencesLearnerLanguagePersistence
 import com.pointquest.android.data.points.DefaultPointsRepository
 import com.pointquest.android.data.points.PointsRepository
 import com.pointquest.android.data.practice.DefaultPracticeRepository
@@ -46,6 +49,9 @@ class AppContainer(
         defaultHost = apiBaseUrl,
         persistence = SharedPreferencesRemoteHostPersistence(applicationContext),
         validator = RemoteHostValidator(BuildConfig.DEBUG),
+    )
+    override val learnerLanguageStore: LearnerLanguageStore = DefaultLearnerLanguageStore(
+        SharedPreferencesLearnerLanguagePersistence(applicationContext),
     )
 
     private val apiClients = ApiClients(apiBaseUrl, sessionState, remoteHostStore::currentHost)

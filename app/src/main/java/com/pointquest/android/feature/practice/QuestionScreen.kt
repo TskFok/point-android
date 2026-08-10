@@ -36,6 +36,8 @@ fun QuestionScreen(
     onNext: () -> Unit,
     onRetry: () -> Unit,
     onRetryTailLoad: () -> Unit,
+    onWrongQuestions: () -> Unit = {},
+    onPreview: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.question_title), modifier = modifier) { padding ->
@@ -137,7 +139,12 @@ fun QuestionScreen(
                 }
                 }
             }
-            state.completed -> PracticeCompleted(onNext, Modifier.padding(padding))
+            state.completed -> PracticeCompleted(
+                onPractice = onNext,
+                onWrongQuestions = onWrongQuestions,
+                onPreview = onPreview,
+                modifier = Modifier.padding(padding),
+            )
             state.question == null && state.error != null -> QuestionError(state, onRetry, Modifier.padding(padding))
             else -> QuestionError(state, onRetry, Modifier.padding(padding))
         }
@@ -200,7 +207,12 @@ private fun TailLoadError(message: String, onRetryTailLoad: () -> Unit) {
 }
 
 @Composable
-private fun PracticeCompleted(onNext: () -> Unit, modifier: Modifier) {
+private fun PracticeCompleted(
+    onPractice: () -> Unit,
+    onWrongQuestions: () -> Unit,
+    onPreview: () -> Unit,
+    modifier: Modifier,
+) {
     Column(
         modifier = modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.Center,
@@ -210,7 +222,13 @@ private fun PracticeCompleted(onNext: () -> Unit, modifier: Modifier) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(stringResource(R.string.practice_completed_title), style = MaterialTheme.typography.headlineSmall)
                 Text(stringResource(R.string.practice_completed_copy))
-                PointPrimaryButton(stringResource(R.string.practice_completed_action), onNext)
+                PointPrimaryButton(stringResource(R.string.practice_completed_action), onPractice)
+                TextButton(onClick = onWrongQuestions, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
+                    Text(stringResource(R.string.home_wrong_questions))
+                }
+                TextButton(onClick = onPreview, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
+                    Text(stringResource(R.string.home_preview_action))
+                }
             }
         }
     }

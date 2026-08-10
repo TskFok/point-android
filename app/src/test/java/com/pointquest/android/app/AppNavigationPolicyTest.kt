@@ -52,6 +52,7 @@ class AppNavigationPolicyTest {
             AppRoute.Splash,
             AppRoute.Login,
             AppRoute.Register,
+            AppRoute.Preview,
             AppRoute.Question(PracticeMode.FIRST, "question-1"),
             AppRoute.WrongQuestions,
             AppRoute.ProductDetail("product-1"),

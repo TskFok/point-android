@@ -144,4 +144,30 @@ class AppNavigationTest {
         composeRule.onNodeWithText("首页").performClick()
         composeRule.onNodeWithText("练习进度").assertIsDisplayed()
     }
+
+    @Test
+    fun practicePreviewHidesBottomNavigationAndReturnsToPracticeHub() {
+        val dependencies = FakeAppDependencies()
+        lateinit var navController: NavHostController
+        composeRule.setContent {
+            navController = rememberNavController()
+            AppNavigationTestShell(
+                session = FakeAppSession(SessionStatus.SignedIn(testStudent())),
+                navController = navController,
+                dependencies = dependencies,
+            )
+        }
+
+        composeRule.runOnUiThread { navController.navigate(AppRoute.Practice) }
+        composeRule.onNodeWithText("开始预习").performClick()
+        composeRule.onNodeWithText("预习题数").assertIsDisplayed()
+        composeRule.onNodeWithText("首页").assertDoesNotExist()
+        composeRule.onNodeWithText("5 题").performClick()
+        composeRule.onNodeWithTag("preview_start").performClick()
+        composeRule.onNodeWithText("第 1 / 5 题").assertIsDisplayed()
+
+        composeRule.runOnUiThread { navController.popBackStack() }
+        composeRule.onNodeWithText("首次答题").assertIsDisplayed()
+        composeRule.onNodeWithText("错题重练").assertIsDisplayed()
+    }
 }

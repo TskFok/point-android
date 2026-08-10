@@ -233,6 +233,39 @@ class QuestionScreenTest {
         composeRule.onNodeWithText("开始预习").assertDoesNotExist()
     }
 
+    @Test
+    fun firstPracticeCompletedStateOffersPracticeWrongQuestionsAndPreviewActions() {
+        var practiceOpened = false
+        var wrongQuestionsOpened = false
+        var previewOpened = false
+        composeRule.setContent {
+            PointQuestTheme {
+                QuestionScreen(
+                    state = QuestionUiState(
+                        mode = PracticeMode.FIRST,
+                        loading = false,
+                        completed = true,
+                    ),
+                    onSelectOption = {},
+                    onSubmit = {},
+                    onPrevious = {},
+                    onNext = { practiceOpened = true },
+                    onRetry = {},
+                    onRetryTailLoad = {},
+                    onWrongQuestions = { wrongQuestionsOpened = true },
+                    onPreview = { previewOpened = true },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("返回练习").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("错题本").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("开始预习").assertIsDisplayed().performClick()
+        assertTrue(practiceOpened)
+        assertTrue(wrongQuestionsOpened)
+        assertTrue(previewOpened)
+    }
+
     private companion object {
         val question = Question(
             id = "q1",

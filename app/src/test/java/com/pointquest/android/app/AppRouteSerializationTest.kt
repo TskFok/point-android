@@ -13,6 +13,7 @@ class AppRouteSerializationTest {
             AppRoute.Register,
             AppRoute.Home,
             AppRoute.Practice,
+            AppRoute.Preview,
             AppRoute.Shop,
             AppRoute.Profile,
             AppRoute.Question(PracticeMode.FIRST, "question-1"),

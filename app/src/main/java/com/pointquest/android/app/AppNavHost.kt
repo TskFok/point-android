@@ -59,6 +59,8 @@ import com.pointquest.android.feature.points.PointsViewModel
 import com.pointquest.android.feature.profile.ProfileScreen
 import com.pointquest.android.feature.profile.ProfileViewModel
 import com.pointquest.android.feature.practice.PracticeHubScreen
+import com.pointquest.android.feature.practice.PreviewScreen
+import com.pointquest.android.feature.practice.PreviewViewModel
 import com.pointquest.android.feature.practice.QuestionEvent
 import com.pointquest.android.feature.practice.QuestionScreen
 import com.pointquest.android.feature.practice.QuestionViewModel
@@ -233,7 +235,7 @@ fun AppNavHost(
                     state = state,
                     onRetry = { homeViewModel.retry() },
                     onStartPractice = { navController.navigate(AppRoute.Question(PracticeMode.FIRST, null)) },
-                    onPreview = {},
+                    onPreview = { navController.navigate(AppRoute.Preview) },
                     onWrongQuestions = { navController.navigate(AppRoute.WrongQuestions) },
                     onOrders = { navController.navigate(AppRoute.Orders) },
                     onPoints = { navController.navigate(AppRoute.Points) },
@@ -248,7 +250,38 @@ fun AppNavHost(
                 PracticeHubScreen(
                     onFirstPractice = { navController.navigate(AppRoute.Question(PracticeMode.FIRST, null)) },
                     onWrongQuestions = { navController.navigate(AppRoute.WrongQuestions) },
+                    onPreview = { navController.navigate(AppRoute.Preview) },
                     bottomBar = { TopLevelNavigationBar(navController) },
+                )
+            }
+        }
+        composable<AppRoute.Preview> {
+            if (container == null) {
+                PlaceholderScreen(navController, AppRoute.Preview, R.string.preview_title, R.string.practice_placeholder)
+            } else {
+                val factory = remember(container.practiceRepository, container.learnerLanguageStore) {
+                    ViewModelFactory<PreviewViewModel> {
+                        PreviewViewModel(
+                            repository = container.practiceRepository,
+                            learnerLanguageStore = container.learnerLanguageStore,
+                        )
+                    }
+                }
+                val previewViewModel: PreviewViewModel = viewModel(factory = factory)
+                val state by previewViewModel.uiState.collectAsStateWithLifecycle()
+                PreviewScreen(
+                    state = state,
+                    onCountChange = previewViewModel::selectCount,
+                    onStart = { previewViewModel.startPreview() },
+                    onSelectOption = previewViewModel::selectOption,
+                    onSubmit = { previewViewModel.submitCurrent() },
+                    onPrevious = previewViewModel::goPrevious,
+                    onNext = { previewViewModel.goNext() },
+                    onRetryLoad = { previewViewModel.retryLoad() },
+                    onRetrySubmit = { previewViewModel.retrySubmit() },
+                    onReset = previewViewModel::resetSession,
+                    onPractice = { navController.navigateTopLevel(AppRoute.Practice) },
+                    onProfile = { navController.navigateTopLevel(AppRoute.Profile) },
                 )
             }
         }
@@ -384,6 +417,8 @@ fun AppNavHost(
                     },
                     onRetry = questionViewModel::load,
                     onRetryTailLoad = { questionViewModel.retryTailLoad() },
+                    onWrongQuestions = { navController.navigate(AppRoute.WrongQuestions) },
+                    onPreview = { navController.navigate(AppRoute.Preview) },
                 )
             }
         }
@@ -437,7 +472,7 @@ fun AppNavHost(
                     },
                     onNoticeShown = wrongQuestionsViewModel::clearNotice,
                     onFirstPractice = { navController.navigate(AppRoute.Question(PracticeMode.FIRST, null)) },
-                    onPreview = {},
+                    onPreview = { navController.navigate(AppRoute.Preview) },
                 )
             }
         }
@@ -659,6 +694,7 @@ private fun NavDestination?.matches(route: AppRoute): Boolean = when (route) {
     AppRoute.Practice -> this?.hasRoute<AppRoute.Practice>() == true
     AppRoute.Shop -> this?.hasRoute<AppRoute.Shop>() == true
     AppRoute.Profile -> this?.hasRoute<AppRoute.Profile>() == true
+    AppRoute.Preview -> this?.hasRoute<AppRoute.Preview>() == true
     is AppRoute.Question -> this?.hasRoute<AppRoute.Question>() == true
     AppRoute.WrongQuestions -> this?.hasRoute<AppRoute.WrongQuestions>() == true
     is AppRoute.ProductDetail -> this?.hasRoute<AppRoute.ProductDetail>() == true

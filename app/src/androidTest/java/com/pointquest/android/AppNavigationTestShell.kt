@@ -146,6 +146,8 @@ internal class FakeAppDependencies(
         )
         override suspend fun nextQuestion(excludeIds: List<String>, language: LearnerLanguage) =
             AppResult.Success(question)
+        override suspend fun previewQuestions(count: Int, language: LearnerLanguage) =
+            AppResult.Success(List(count) { index -> question.copy(id = "preview-${index + 1}") })
         override suspend fun answerFirst(
             questionId: String,
             selectedOptionId: String,

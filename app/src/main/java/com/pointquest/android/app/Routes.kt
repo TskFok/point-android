@@ -26,6 +26,9 @@ sealed interface AppRoute {
     data object Practice : AppRoute
 
     @Serializable
+    data object Preview : AppRoute
+
+    @Serializable
     data object Shop : AppRoute
 
     @Serializable

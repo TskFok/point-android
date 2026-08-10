@@ -16,6 +16,7 @@ import com.pointquest.android.core.ui.components.PointScaffold
 fun PracticeHubScreen(
     onFirstPractice: () -> Unit,
     onWrongQuestions: () -> Unit,
+    onPreview: () -> Unit,
     bottomBar: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -30,6 +31,7 @@ fun PracticeHubScreen(
         ) {
             PointPrimaryButton(stringResource(R.string.practice_first_action), onFirstPractice)
             PointPrimaryButton(stringResource(R.string.practice_wrong_action), onWrongQuestions)
+            PointPrimaryButton(stringResource(R.string.home_preview_action), onPreview)
         }
     }
 }

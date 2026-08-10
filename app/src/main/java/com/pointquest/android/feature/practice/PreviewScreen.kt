@@ -43,6 +43,8 @@ fun PreviewScreen(
     onRetryLoad: () -> Unit,
     onRetrySubmit: () -> Unit,
     onReset: () -> Unit,
+    onPractice: () -> Unit = {},
+    onProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.preview_title), modifier = modifier) { padding ->
@@ -67,6 +69,8 @@ fun PreviewScreen(
             state.phase == PreviewPhase.SUMMARY -> PreviewSummary(
                 state = state,
                 onReset = onReset,
+                onPractice = onPractice,
+                onProfile = onProfile,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
         }
@@ -252,6 +256,8 @@ private fun PreviewQuiz(
 private fun PreviewSummary(
     state: PreviewUiState,
     onReset: () -> Unit,
+    onPractice: () -> Unit,
+    onProfile: () -> Unit,
     modifier: Modifier,
 ) {
     Column(
@@ -269,6 +275,12 @@ private fun PreviewSummary(
                     onClick = onReset,
                     modifier = Modifier.testTag("preview_reset"),
                 )
+                TextButton(onClick = onPractice, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
+                    Text(stringResource(R.string.practice_completed_action))
+                }
+                TextButton(onClick = onProfile, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
+                    Text(stringResource(R.string.profile_title))
+                }
             }
         }
     }

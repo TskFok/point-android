@@ -222,6 +222,7 @@ fun AppNavHost(
                             container.practiceRepository,
                             container.pointsRepository,
                             container.sessionState,
+                            container.learnerLanguageStore,
                             appDataSync = container.appDataSync,
                         )
                     }
@@ -391,7 +392,10 @@ fun AppNavHost(
             } else {
                 val factory = remember(container.practiceRepository) {
                     ViewModelFactory<WrongQuestionsViewModel> {
-                        WrongQuestionsViewModel(container.practiceRepository)
+                        WrongQuestionsViewModel(
+                            repository = container.practiceRepository,
+                            learnerLanguageStore = container.learnerLanguageStore,
+                        )
                     }
                 }
                 val wrongQuestionsViewModel: WrongQuestionsViewModel = viewModel(factory = factory)

@@ -6,12 +6,15 @@ import com.pointquest.android.R
 import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStatus
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.PracticeSummary
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.UiText
+import com.pointquest.android.data.preferences.LearnerLanguageStore
 import com.pointquest.android.data.points.PointsRepository
 import com.pointquest.android.data.practice.PracticeRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -26,13 +29,15 @@ class HomeViewModel(
     private val practiceRepository: PracticeRepository,
     private val pointsRepository: PointsRepository,
     sessionState: SessionState,
+    private val learnerLanguageStore: LearnerLanguageStore,
     private val scopeOverride: CoroutineScope? = null,
     private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(HomeUiState())
+    private val mutableUiState = MutableStateFlow(HomeUiState(language = learnerLanguageStore.language.value))
     private var summaryFailed = true
     private var balanceFailed = true
     private var sessionBalance: Int? = null
+    private var loadGeneration = 0
 
     val uiState: StateFlow<HomeUiState> = mutableUiState
     var loadingJob: Job? = null
@@ -49,6 +54,15 @@ class HomeViewModel(
                     )
                 }
             }
+        }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            learnerLanguageStore.language
+                .drop(1)
+                .collect { language ->
+                    summaryFailed = true
+                    loadingJob?.cancel()
+                    load(loadSummary = true, loadBalance = false, clearSummary = true, language = language)
+                }
         }
         appDataSync?.let { sync ->
             scope.launch {
@@ -79,16 +93,30 @@ class HomeViewModel(
         return load(loadSummary = summaryFailed, loadBalance = balanceFailed)
     }
 
-    private fun load(loadSummary: Boolean, loadBalance: Boolean): Job {
-        mutableUiState.value = mutableUiState.value.copy(loading = true, error = null, canRetry = false)
+    private fun load(
+        loadSummary: Boolean,
+        loadBalance: Boolean,
+        clearSummary: Boolean = false,
+        language: LearnerLanguage = learnerLanguageStore.language.value,
+    ): Job {
+        val generation = ++loadGeneration
+        mutableUiState.value = mutableUiState.value.copy(
+            language = language,
+            summary = if (clearSummary) null else mutableUiState.value.summary,
+            loading = true,
+            error = null,
+            canRetry = false,
+        )
         return scope.launch {
             val results = coroutineScope {
-                val summary = if (loadSummary) async { practiceRepository.summary() } else null
+                val summary = if (loadSummary) async { practiceRepository.summary(language) } else null
                 val balance = if (loadBalance) async { pointsRepository.balance() } else null
                 summary?.await() to balance?.await()
             }
+            if (!isLatestRequest(generation, language)) return@launch
             results.first?.let(::applySummaryResult)
             results.second?.let(::applyBalanceResult)
+            if (!isLatestRequest(generation, language)) return@launch
             mutableUiState.value = mutableUiState.value.copy(
                 balance = currentPreferredBalance(),
                 loading = false,
@@ -130,6 +158,9 @@ class HomeViewModel(
         balanceFailed -> UiText.Resource(R.string.home_error_balance)
         else -> null
     }
+
+    private fun isLatestRequest(generation: Int, language: LearnerLanguage): Boolean =
+        generation == loadGeneration && learnerLanguageStore.language.value == language
 
     private val scope: CoroutineScope
         get() = scopeOverride ?: viewModelScope

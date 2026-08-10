@@ -1,6 +1,7 @@
 package com.pointquest.android.feature.practice
 
 import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PageMeta
 import com.pointquest.android.core.model.PracticeSummary
@@ -8,6 +9,7 @@ import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.data.practice.PracticeRepository
+import com.pointquest.android.test.FakeLearnerLanguageStore
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +24,22 @@ import org.junit.Test
 
 class WrongQuestionsViewModelTest {
     @Test
+    fun initialLoadUsesCurrentLearnerLanguage() = runBlocking {
+        val repository = FakePracticeRepository(
+            responses = arrayDequeOf(immediate(page(1, 1, 1, wrong("q1")))),
+        )
+        val viewModel = viewModel(
+            repository = repository,
+            store = FakeLearnerLanguageStore(LearnerLanguage.FR),
+        )
+
+        viewModel.load().join()
+
+        assertEquals(listOf(PageRequest(1, LearnerLanguage.FR)), repository.requests)
+        assertEquals(LearnerLanguage.FR, viewModel.uiState.value.language)
+    }
+
+    @Test
     fun repeatedInitializationKeepsLoadedPagesWithoutAnotherRepositoryCall() = runBlocking {
         val repository = FakePracticeRepository(
             responses = arrayDequeOf(
@@ -29,14 +47,14 @@ class WrongQuestionsViewModelTest {
                 immediate(page(2, 2, 2, wrong("q2"))),
             ),
         )
-        val viewModel = viewModel(repository)
+        val viewModel = viewModel(repository = repository)
         viewModel.initialize()?.join()
         viewModel.loadMore()?.join()
 
         val duplicate = viewModel.initialize()
 
         assertNull(duplicate)
-        assertEquals(listOf(1, 2), repository.pageCalls)
+        assertEquals(listOf(1, 2), repository.requests.map { it.page })
         assertEquals(listOf("q1", "q2"), viewModel.uiState.value.items.map { it.question.id })
         assertEquals(2, viewModel.uiState.value.paged.meta.page)
     }
@@ -49,7 +67,7 @@ class WrongQuestionsViewModelTest {
                 immediate(page(2, 2, 3, wrong("q2"), wrong("q3"))),
             ),
         )
-        val viewModel = viewModel(repository)
+        val viewModel = viewModel(repository = repository)
         viewModel.load().join()
 
         viewModel.loadMore()?.join()
@@ -69,14 +87,14 @@ class WrongQuestionsViewModelTest {
                 DeferredPage(deferred),
             ),
         )
-        val viewModel = viewModel(repository)
+        val viewModel = viewModel(repository = repository)
         viewModel.load().join()
 
         val first = viewModel.loadMore()
         val duplicate = viewModel.loadMore()
 
         assertNull(duplicate)
-        assertEquals(listOf(1, 2), repository.pageCalls)
+        assertEquals(listOf(1, 2), repository.requests.map { it.page })
         deferred.complete(AppResult.Success(page(2, 2, 2, wrong("q2"))))
         first?.join()
         assertEquals(listOf("q1", "q2"), viewModel.uiState.value.items.map { it.question.id })
@@ -90,12 +108,12 @@ class WrongQuestionsViewModelTest {
                 immediate(page(2, 2, 3, wrong("q3"))),
             ),
         )
-        val viewModel = viewModel(repository)
+        val viewModel = viewModel(repository = repository)
 
         viewModel.load().join()
         viewModel.loadingJob?.join()
 
-        assertEquals(listOf(1, 2), repository.pageCalls)
+        assertEquals(listOf(1, 2), repository.requests.map { it.page })
         assertEquals(listOf("q3"), viewModel.uiState.value.items.map { it.question.id })
         assertEquals(2, viewModel.uiState.value.paged.meta.page)
     }
@@ -109,13 +127,13 @@ class WrongQuestionsViewModelTest {
                 immediate(page(1, 1, 1, wrong("q1"))),
             ),
         )
-        val viewModel = viewModel(repository)
+        val viewModel = viewModel(repository = repository)
         viewModel.load().join()
         viewModel.loadMore()?.join()
 
         viewModel.removeMastered("q2")?.join()
 
-        assertEquals(listOf(1, 2, 1), repository.pageCalls)
+        assertEquals(listOf(1, 2, 1), repository.requests.map { it.page })
         assertEquals(listOf("q1"), viewModel.uiState.value.items.map { it.question.id })
         assertEquals(1, viewModel.uiState.value.paged.meta.total)
         assertEquals(1, viewModel.uiState.value.paged.meta.totalPages)
@@ -126,7 +144,7 @@ class WrongQuestionsViewModelTest {
         val repository = FakePracticeRepository(
             responses = arrayDequeOf(immediate(page(1, 0, 0))),
         )
-        val viewModel = viewModel(repository)
+        val viewModel = viewModel(repository = repository)
 
         viewModel.load().join()
 
@@ -135,10 +153,103 @@ class WrongQuestionsViewModelTest {
         assertFalse(viewModel.uiState.value.canLoadMore)
     }
 
-    private fun viewModel(repository: PracticeRepository) = WrongQuestionsViewModel(
-        repository,
-        CoroutineScope(Job() + Dispatchers.Unconfined),
+    @Test
+    fun changingLanguageResetsPagingAndUsesNewLanguageForRefreshAndLoadMore() = runBlocking {
+        val firstJaPage = CompletableDeferred<AppResult<Page<WrongQuestion>>>()
+        val repository = FakePracticeRepository(
+            responses = arrayDequeOf(
+                immediate(page(1, 2, 2, wrong("q1"))),
+                immediate(page(2, 2, 2, wrong("q2"))),
+                DeferredPage(firstJaPage),
+                immediate(page(2, 2, 2, wrong("jq2"))),
+            ),
+        )
+        val store = FakeLearnerLanguageStore(LearnerLanguage.ALL)
+        val viewModel = viewModel(repository = repository, store = store)
+        viewModel.load().join()
+        viewModel.loadMore()?.join()
+
+        store.setLanguage(LearnerLanguage.JA)
+
+        assertEquals(
+            listOf(
+                PageRequest(1, LearnerLanguage.ALL),
+                PageRequest(2, LearnerLanguage.ALL),
+                PageRequest(1, LearnerLanguage.JA),
+            ),
+            repository.requests,
+        )
+        assertEquals(LearnerLanguage.JA, viewModel.uiState.value.language)
+        assertTrue(viewModel.uiState.value.loading)
+        assertTrue(viewModel.uiState.value.items.isEmpty())
+        assertEquals(1, viewModel.uiState.value.paged.meta.page)
+
+        firstJaPage.complete(AppResult.Success(page(1, 2, 2, wrong("jq1"))))
+        viewModel.loadingJob?.join()
+        viewModel.loadMore()?.join()
+
+        assertEquals(
+            listOf(
+                PageRequest(1, LearnerLanguage.ALL),
+                PageRequest(2, LearnerLanguage.ALL),
+                PageRequest(1, LearnerLanguage.JA),
+                PageRequest(2, LearnerLanguage.JA),
+            ),
+            repository.requests,
+        )
+        assertEquals(listOf("jq1", "jq2"), viewModel.uiState.value.items.map { it.question.id })
+        assertEquals(LearnerLanguage.JA, viewModel.uiState.value.language)
+    }
+
+    @Test
+    fun staleLoadMoreResultDoesNotPolluteNewLanguageState() = runBlocking {
+        val oldLoadMore = CompletableDeferred<AppResult<Page<WrongQuestion>>>()
+        val newLanguageFirstPage = CompletableDeferred<AppResult<Page<WrongQuestion>>>()
+        val repository = FakePracticeRepository(
+            responses = arrayDequeOf(
+                immediate(page(1, 2, 2, wrong("q1"))),
+                DeferredPage(oldLoadMore),
+                DeferredPage(newLanguageFirstPage),
+            ),
+        )
+        val store = FakeLearnerLanguageStore(LearnerLanguage.ALL)
+        val viewModel = viewModel(repository = repository, store = store)
+        viewModel.load().join()
+
+        val loadMore = viewModel.loadMore()
+        store.setLanguage(LearnerLanguage.JA)
+
+        assertEquals(
+            listOf(
+                PageRequest(1, LearnerLanguage.ALL),
+                PageRequest(2, LearnerLanguage.ALL),
+                PageRequest(1, LearnerLanguage.JA),
+            ),
+            repository.requests,
+        )
+        assertTrue(viewModel.uiState.value.items.isEmpty())
+        assertEquals(LearnerLanguage.JA, viewModel.uiState.value.language)
+
+        oldLoadMore.complete(AppResult.Success(page(2, 2, 2, wrong("q2"))))
+        newLanguageFirstPage.complete(AppResult.Success(page(1, 1, 1, wrong("jq1"))))
+        loadMore?.join()
+        viewModel.loadingJob?.join()
+
+        assertEquals(listOf("jq1"), viewModel.uiState.value.items.map { it.question.id })
+        assertEquals(1, viewModel.uiState.value.paged.meta.page)
+        assertEquals(LearnerLanguage.JA, viewModel.uiState.value.language)
+    }
+
+    private fun viewModel(
+        repository: PracticeRepository,
+        store: FakeLearnerLanguageStore = FakeLearnerLanguageStore(LearnerLanguage.ALL),
+    ) = WrongQuestionsViewModel(
+        repository = repository,
+        learnerLanguageStore = store,
+        scopeOverride = CoroutineScope(Job() + Dispatchers.Unconfined),
     )
+
+    private data class PageRequest(val page: Int, val language: LearnerLanguage)
 
     private sealed interface PageResponse
 
@@ -151,10 +262,13 @@ class WrongQuestionsViewModelTest {
     private class FakePracticeRepository(
         private val responses: ArrayDeque<PageResponse>,
     ) : PracticeRepository {
-        val pageCalls = mutableListOf<Int>()
+        val requests = mutableListOf<PageRequest>()
 
-        override suspend fun wrongQuestions(page: Int): AppResult<Page<WrongQuestion>> {
-            pageCalls += page
+        override suspend fun wrongQuestions(
+            page: Int,
+            language: LearnerLanguage,
+        ): AppResult<Page<WrongQuestion>> {
+            requests += PageRequest(page, language)
             return when (val response = responses.removeFirst()) {
                 is ImmediatePage -> response.value
                 is DeferredPage -> response.value.await()

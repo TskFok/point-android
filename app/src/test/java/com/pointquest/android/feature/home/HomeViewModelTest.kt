@@ -4,6 +4,7 @@ import com.pointquest.android.R
 import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.ActiveSession
 import com.pointquest.android.core.auth.SessionState
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PointLedgerEntry
@@ -17,6 +18,7 @@ import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.data.points.PointsRepository
 import com.pointquest.android.data.practice.PracticeRepository
+import com.pointquest.android.test.FakeLearnerLanguageStore
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -32,12 +34,37 @@ import org.junit.Test
 
 class HomeViewModelTest {
     @Test
+    fun initialLoadUsesCurrentLearnerLanguage() = runBlocking {
+        val practice = FakePracticeRepository(result = AppResult.Success(summary))
+        val points = FakePointsRepository(result = AppResult.Success(99))
+        val store = FakeLearnerLanguageStore(LearnerLanguage.JA)
+
+        val viewModel = HomeViewModel(
+            practiceRepository = practice,
+            pointsRepository = points,
+            sessionState = signedInState(),
+            learnerLanguageStore = store,
+            scopeOverride = testScope(),
+        )
+        viewModel.loadingJob?.join()
+
+        assertEquals(listOf(LearnerLanguage.JA), practice.summaryLanguages)
+        assertEquals(LearnerLanguage.JA, viewModel.uiState.value.language)
+    }
+
+    @Test
     fun loadsSummaryAndBalanceConcurrentlyAndPrefersOnlineBalance() = runBlocking {
         val summaryDeferred = CompletableDeferred<AppResult<PracticeSummary>>()
         val balanceDeferred = CompletableDeferred<AppResult<Int>>()
         val practice = FakePracticeRepository(summaryDeferred)
         val points = FakePointsRepository(balanceDeferred)
-        val viewModel = HomeViewModel(practice, points, signedInState(), testScope())
+        val viewModel = HomeViewModel(
+            practiceRepository = practice,
+            pointsRepository = points,
+            sessionState = signedInState(),
+            learnerLanguageStore = FakeLearnerLanguageStore(LearnerLanguage.ALL),
+            scopeOverride = testScope(),
+        )
 
         assertTrue(practice.summaryStarted)
         assertTrue(points.balanceStarted)
@@ -59,7 +86,13 @@ class HomeViewModelTest {
     fun partialFailureKeepsSuccessfulSummaryAndExposesRetryableError() = runBlocking {
         val practice = FakePracticeRepository(result = AppResult.Success(summary))
         val points = FakePointsRepository(result = failure("NETWORK_ERROR"))
-        val viewModel = HomeViewModel(practice, points, signedInState(), testScope())
+        val viewModel = HomeViewModel(
+            practiceRepository = practice,
+            pointsRepository = points,
+            sessionState = signedInState(),
+            learnerLanguageStore = FakeLearnerLanguageStore(LearnerLanguage.ALL),
+            scopeOverride = testScope(),
+        )
         viewModel.loadingJob?.join()
 
         assertEquals(summary, viewModel.uiState.value.summary)
@@ -81,7 +114,13 @@ class HomeViewModelTest {
         val practice = FakePracticeRepository(result = failure("NETWORK_ERROR"))
         val points = FakePointsRepository(result = failure("NETWORK_ERROR"))
         val sessionState = signedInState(points = 42)
-        val viewModel = HomeViewModel(practice, points, sessionState, testScope())
+        val viewModel = HomeViewModel(
+            practiceRepository = practice,
+            pointsRepository = points,
+            sessionState = sessionState,
+            learnerLanguageStore = FakeLearnerLanguageStore(LearnerLanguage.ALL),
+            scopeOverride = testScope(),
+        )
         viewModel.loadingJob?.join()
 
         assertNull(viewModel.uiState.value.summary)
@@ -107,6 +146,7 @@ class HomeViewModelTest {
             practice,
             points,
             sessionState,
+            learnerLanguageStore = FakeLearnerLanguageStore(LearnerLanguage.ALL),
             scopeOverride = testScope(),
             appDataSync = sync,
         )
@@ -123,16 +163,73 @@ class HomeViewModelTest {
         assertEquals(77, viewModel.uiState.value.balance)
     }
 
+    @Test
+    fun changingLanguageClearsStaleSummaryAndKeepsOnlyNewestGenerationResult() = runBlocking {
+        val allSummary = CompletableDeferred<AppResult<PracticeSummary>>()
+        val jaSummary = CompletableDeferred<AppResult<PracticeSummary>>()
+        val practice = FakePracticeRepository(
+            summaryResponses = arrayDequeOf(
+                DeferredSummary(allSummary),
+                DeferredSummary(jaSummary),
+            ),
+        )
+        val points = FakePointsRepository(result = AppResult.Success(50))
+        val store = FakeLearnerLanguageStore(LearnerLanguage.ALL)
+        val viewModel = HomeViewModel(
+            practiceRepository = practice,
+            pointsRepository = points,
+            sessionState = signedInState(),
+            learnerLanguageStore = store,
+            scopeOverride = testScope(),
+        )
+
+        assertEquals(listOf(LearnerLanguage.ALL), practice.summaryLanguages)
+
+        store.setLanguage(LearnerLanguage.JA)
+
+        assertEquals(listOf(LearnerLanguage.ALL, LearnerLanguage.JA), practice.summaryLanguages)
+        assertEquals(LearnerLanguage.JA, viewModel.uiState.value.language)
+        assertNull(viewModel.uiState.value.summary)
+        assertTrue(viewModel.uiState.value.loading)
+
+        allSummary.complete(AppResult.Success(summary.copy(firstAnsweredCount = 1)))
+        jaSummary.complete(AppResult.Success(summary.copy(firstAnsweredCount = 9)))
+        viewModel.loadingJob?.join()
+
+        assertEquals(LearnerLanguage.JA, viewModel.uiState.value.language)
+        assertEquals(9, viewModel.uiState.value.summary?.firstAnsweredCount)
+        assertEquals(50, viewModel.uiState.value.balance)
+    }
+
+    private sealed interface SummaryResponse
+
+    private data class ImmediateSummary(val value: AppResult<PracticeSummary>) : SummaryResponse
+
+    private data class DeferredSummary(
+        val value: CompletableDeferred<AppResult<PracticeSummary>>,
+    ) : SummaryResponse
+
     private class FakePracticeRepository(
         private val deferred: CompletableDeferred<AppResult<PracticeSummary>>? = null,
         var result: AppResult<PracticeSummary> = AppResult.Success(summary),
+        private val summaryResponses: ArrayDeque<SummaryResponse>? = null,
     ) : PracticeRepository {
         var calls = 0
         var summaryStarted = false
-        override suspend fun summary(): AppResult<PracticeSummary> {
+        val summaryLanguages = mutableListOf<LearnerLanguage>()
+
+        override suspend fun summary(language: LearnerLanguage): AppResult<PracticeSummary> {
             calls++
             summaryStarted = true
-            return deferred?.await() ?: result
+            summaryLanguages += language
+            return when {
+                summaryResponses != null -> when (val response = summaryResponses.removeFirst()) {
+                    is ImmediateSummary -> response.value
+                    is DeferredSummary -> response.value.await()
+                }
+                deferred != null -> deferred.await()
+                else -> result
+            }
         }
         override suspend fun nextQuestion(excludeIds: List<String>): AppResult<Question> = error("unused")
         override suspend fun answerFirst(questionId: String, selectedOptionId: String): AppResult<AnswerResult> = error("unused")
@@ -158,6 +255,7 @@ class HomeViewModelTest {
         val summary = PracticeSummary(20, 50, 8, 3, 2, 12)
         fun failure(code: String) = AppResult.Failure(AppError(null, code, "failed", null))
         fun testScope() = CoroutineScope(Job() + Dispatchers.Unconfined)
+        fun <T> arrayDequeOf(vararg values: T) = ArrayDeque(values.toList())
         fun signedInState(points: Int = 42) = SessionState().apply {
             publish(
                 ActiveSession(

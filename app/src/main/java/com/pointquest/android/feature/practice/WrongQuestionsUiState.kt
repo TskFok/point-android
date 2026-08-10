@@ -1,10 +1,12 @@
 package com.pointquest.android.feature.practice
 
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.network.PagedState
 import com.pointquest.android.core.ui.UiText
 
 data class WrongQuestionsUiState(
+    val language: LearnerLanguage = LearnerLanguage.ALL,
     val paged: PagedState<WrongQuestion> = PagedState(),
     val loading: Boolean = true,
     val loadingMore: Boolean = false,

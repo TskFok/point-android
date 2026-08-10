@@ -3,25 +3,33 @@ package com.pointquest.android.feature.practice
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.R
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.network.PageAdjustment
 import com.pointquest.android.core.network.PagedState
 import com.pointquest.android.core.ui.UiErrorMapper
 import com.pointquest.android.core.ui.UiText
+import com.pointquest.android.data.preferences.LearnerLanguageStore
 import com.pointquest.android.data.practice.PracticeRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 class WrongQuestionsViewModel(
     private val repository: PracticeRepository,
+    private val learnerLanguageStore: LearnerLanguageStore,
     private val scopeOverride: CoroutineScope? = null,
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(WrongQuestionsUiState())
+    private val mutableUiState = MutableStateFlow(
+        WrongQuestionsUiState(language = learnerLanguageStore.language.value),
+    )
     private val initializationLock = Any()
     private var initialized = false
+    private var requestGeneration = 0
 
     val uiState: StateFlow<WrongQuestionsUiState> = mutableUiState
 
@@ -30,16 +38,35 @@ class WrongQuestionsViewModel(
     var loadMoreJob: Job? = null
         private set
 
+    init {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            learnerLanguageStore.language
+                .drop(1)
+                .collect { language ->
+                    if (!initialized) {
+                        mutableUiState.value = mutableUiState.value.copy(language = language)
+                        return@collect
+                    }
+                    load(language = language)
+                }
+        }
+    }
+
     fun initialize(): Job? = synchronized(initializationLock) {
         if (initialized) return@synchronized null
         initialized = true
         load()
     }
 
-    fun load(): Job {
+    fun load(language: LearnerLanguage = learnerLanguageStore.language.value): Job {
+        synchronized(initializationLock) {
+            initialized = true
+        }
         loadingJob?.cancel()
         loadMoreJob?.cancel()
+        val generation = ++requestGeneration
         mutableUiState.value = mutableUiState.value.copy(
+            language = language,
             paged = PagedState(),
             loading = true,
             loadingMore = false,
@@ -47,7 +74,13 @@ class WrongQuestionsViewModel(
             loadMoreError = null,
         )
         return scope.launch {
-            requestPage(FIRST_PAGE, initial = true, visited = mutableSetOf())
+            requestPage(
+                page = FIRST_PAGE,
+                initial = true,
+                visited = mutableSetOf(),
+                language = language,
+                generation = generation,
+            )
         }.also { loadingJob = it }
     }
 
@@ -57,7 +90,13 @@ class WrongQuestionsViewModel(
         val nextPage = state.paged.meta.page + 1
         mutableUiState.value = state.copy(loadingMore = true, loadMoreError = null)
         return scope.launch {
-            requestPage(nextPage, initial = false, visited = mutableSetOf())
+            requestPage(
+                page = nextPage,
+                initial = false,
+                visited = mutableSetOf(),
+                language = state.language,
+                generation = requestGeneration,
+            )
         }.also { loadMoreJob = it }
     }
 
@@ -84,9 +123,16 @@ class WrongQuestionsViewModel(
             (remaining.isEmpty() || oldMeta.page > lastValidPage)
         if (!needsFallback) return null
 
+        val generation = ++requestGeneration
         mutableUiState.value = mutableUiState.value.copy(loading = true, error = null)
         return scope.launch {
-            requestPage(lastValidPage, initial = true, visited = mutableSetOf())
+            requestPage(
+                page = lastValidPage,
+                initial = true,
+                visited = mutableSetOf(),
+                language = mutableUiState.value.language,
+                generation = generation,
+            )
         }.also { loadingJob = it }
     }
 
@@ -100,25 +146,41 @@ class WrongQuestionsViewModel(
         mutableUiState.value = mutableUiState.value.copy(notice = null)
     }
 
-    private suspend fun requestPage(page: Int, initial: Boolean, visited: MutableSet<Int>) {
+    private suspend fun requestPage(
+        page: Int,
+        initial: Boolean,
+        visited: MutableSet<Int>,
+        language: LearnerLanguage,
+        generation: Int,
+    ) {
         if (!visited.add(page)) {
+            if (!isLatestRequest(generation, language)) return
             finishWithAdjustmentError(initial)
             return
         }
-        when (val result = repository.wrongQuestions(page)) {
+        when (val result = repository.wrongQuestions(page, language)) {
             is AppResult.Success -> {
+                if (!isLatestRequest(generation, language)) return
                 val base = mutableUiState.value.paged.copy(adjustment = null)
                 val merged = base.merge(result.value) { it.question.id }
                 val adjustment = merged.adjustment
                 if (adjustment is PageAdjustment.Reload) {
+                    if (!isLatestRequest(generation, language)) return
                     mutableUiState.value = mutableUiState.value.copy(
                         paged = base,
                         loading = true,
                         loadingMore = false,
                     )
-                    requestPage(adjustment.lastValidPage, initial = true, visited = visited)
+                    requestPage(
+                        page = adjustment.lastValidPage,
+                        initial = true,
+                        visited = visited,
+                        language = language,
+                        generation = generation,
+                    )
                 } else {
                     mutableUiState.value = mutableUiState.value.copy(
+                        language = language,
                         paged = merged,
                         loading = false,
                         loadingMore = false,
@@ -128,6 +190,7 @@ class WrongQuestionsViewModel(
                 }
             }
             is AppResult.Failure -> {
+                if (!isLatestRequest(generation, language)) return
                 val message = UiErrorMapper.map(result.error)
                 mutableUiState.value = if (initial) {
                     mutableUiState.value.copy(loading = false, loadingMore = false, error = message)
@@ -152,6 +215,9 @@ class WrongQuestionsViewModel(
         pageSize <= 0 -> FIRST_PAGE
         else -> (total + pageSize - 1) / pageSize
     }
+
+    private fun isLatestRequest(generation: Int, language: LearnerLanguage): Boolean =
+        generation == requestGeneration && learnerLanguageStore.language.value == language
 
     private val scope: CoroutineScope
         get() = scopeOverride ?: viewModelScope

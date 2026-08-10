@@ -8,10 +8,12 @@ import com.pointquest.android.core.network.RemoteHostErrorCode
 import com.pointquest.android.core.network.RemoteHostStore
 import com.pointquest.android.core.ui.UiText
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class RemoteHostUiState(
     val activeHost: String,
@@ -53,11 +55,14 @@ class RemoteHostViewModel(
             applying = true,
         )
         return scope.launch {
-            val result = store.apply(current.draftHost)
+            val result = withContext(Dispatchers.IO) {
+                store.apply(current.draftHost)
+            }
             mutableUiState.value = when (result) {
                 is RemoteHostApplyResult.Applied -> mutableUiState.value.copy(
                     activeHost = result.host,
                     draftHost = result.host,
+                    error = null,
                     message = UiText.Resource(R.string.remote_host_apply_success),
                     applying = false,
                 )

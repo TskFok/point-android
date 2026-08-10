@@ -74,6 +74,25 @@ class RemoteHostViewModelTest {
         assertFalse(viewModel.uiState.value.applying)
     }
 
+    @Test
+    fun successfulApplyClearsLoginPreconditionErrorSetWhileApplying() = runTest {
+        val viewModel = RemoteHostViewModel(store(), backgroundScope)
+        viewModel.updateHost("https://new.example.test")
+
+        val applyJob = viewModel.apply()
+        assertFalse(viewModel.requireAppliedForLogin())
+        assertEquals(
+            UiText.Resource(R.string.remote_host_apply_before_login),
+            viewModel.uiState.value.error,
+        )
+
+        applyJob!!.join()
+
+        assertEquals("https://new.example.test/", viewModel.uiState.value.activeHost)
+        assertNull(viewModel.uiState.value.error)
+        assertEquals(UiText.Resource(R.string.remote_host_apply_success), viewModel.uiState.value.message)
+    }
+
     private fun store() = RemoteHostStore(
         defaultHost = "https://default.example.test/",
         persistence = MemoryPersistence(),

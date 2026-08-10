@@ -14,6 +14,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -40,6 +41,8 @@ fun WrongQuestionsScreen(
     onLoadMore: () -> Unit,
     onSelectQuestion: (WrongQuestion) -> Unit,
     onNoticeShown: () -> Unit,
+    onFirstPractice: () -> Unit = {},
+    onPreview: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -62,6 +65,13 @@ fun WrongQuestionsScreen(
                 state = asyncState,
                 onRetry = onRetry,
                 modifier = Modifier.fillMaxSize(),
+                emptyContent = {
+                    WrongQuestionsEmptyState(
+                        onFirstPractice = onFirstPractice,
+                        onPreview = onPreview,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                },
             ) { questions ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -96,6 +106,36 @@ fun WrongQuestionsScreen(
                 hostState = snackbarHostState,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
+        }
+    }
+}
+
+@Composable
+private fun WrongQuestionsEmptyState(
+    onFirstPractice: () -> Unit,
+    onPreview: () -> Unit,
+    modifier: Modifier,
+) {
+    Box(modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+        PointCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    stringResource(R.string.wrong_questions_empty_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(R.string.wrong_questions_empty_copy),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = onFirstPractice,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text(stringResource(R.string.practice_first_action)) }
+                Button(
+                    onClick = onPreview,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text(stringResource(R.string.home_preview_action)) }
+            }
         }
     }
 }

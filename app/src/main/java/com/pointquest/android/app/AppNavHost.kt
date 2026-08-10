@@ -233,6 +233,7 @@ fun AppNavHost(
                     state = state,
                     onRetry = { homeViewModel.retry() },
                     onStartPractice = { navController.navigate(AppRoute.Question(PracticeMode.FIRST, null)) },
+                    onPreview = {},
                     onWrongQuestions = { navController.navigate(AppRoute.WrongQuestions) },
                     onOrders = { navController.navigate(AppRoute.Orders) },
                     onPoints = { navController.navigate(AppRoute.Points) },
@@ -290,6 +291,7 @@ fun AppNavHost(
                         ProfileViewModel(
                             container.authRepository,
                             container.sessionState,
+                            container.learnerLanguageStore,
                             appDataSync = container.appDataSync,
                         )
                     }
@@ -303,6 +305,7 @@ fun AppNavHost(
                     onRequestLogout = profileViewModel::requestLogout,
                     onDismissLogout = profileViewModel::dismissLogout,
                     onConfirmLogout = { profileViewModel.confirmLogout() },
+                    onLanguageChange = profileViewModel::setLanguage,
                     bottomBar = { TopLevelNavigationBar(navController) },
                 )
             }
@@ -433,6 +436,8 @@ fun AppNavHost(
                         )
                     },
                     onNoticeShown = wrongQuestionsViewModel::clearNotice,
+                    onFirstPractice = { navController.navigate(AppRoute.Question(PracticeMode.FIRST, null)) },
+                    onPreview = {},
                 )
             }
         }
@@ -505,6 +510,7 @@ fun AppNavHost(
                     onLoadMore = { orderListViewModel.loadMore() },
                     onOrderClick = { order -> navController.navigate(AppRoute.OrderDetail(order.id)) },
                     onBack = { navController.popBackStack() },
+                    onShop = { navController.navigate(AppRoute.Shop) },
                 )
             }
         }

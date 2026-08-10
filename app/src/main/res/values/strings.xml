@@ -59,6 +59,9 @@
     <string name="home_unanswered_copy">还有 %1$d 道题未回答</string>
     <string name="home_wrong_copy">待练错题 %1$d 道，已掌握 %2$d 道</string>
     <string name="home_start_practice">开始答题</string>
+    <string name="home_empty_title">暂无待练内容</string>
+    <string name="home_empty_copy">首次答题和错题重练都完成了，可以继续预习或再练一轮。</string>
+    <string name="home_preview_action">开始预习</string>
     <string name="home_quick_actions">快捷入口</string>
     <string name="home_wrong_questions">错题本</string>
     <string name="home_orders">兑换记录</string>
@@ -81,7 +84,11 @@
     <string name="product_page_changed">商品列表已更新，请重试</string>
     <string name="profile_title">我的</string>
     <string name="profile_student_role">学生</string>
+    <string name="profile_account_id">账号 ID：%1$s</string>
     <string name="profile_points">当前积分：%1$d</string>
+    <string name="profile_language_title">练习语言</string>
+    <string name="profile_language_selected">%1$s（当前）</string>
+    <string name="profile_language_save_failed">语言设置保存失败，请重试</string>
     <string name="profile_orders">兑换记录</string>
     <string name="profile_points_ledger">积分明细</string>
     <string name="profile_logout">退出登录</string>
@@ -120,6 +127,8 @@
     <string name="practice_completed_action">返回练习</string>
     <string name="wrong_questions_title">错题本</string>
     <string name="wrong_questions_placeholder">错题本功能即将接入</string>
+    <string name="wrong_questions_empty_title">错题本还是空的</string>
+    <string name="wrong_questions_empty_copy">暂时没有需要重练的错题，可以开始首次答题或预习新题。</string>
     <string name="wrong_question_error_count">累计答错 %1$d 次</string>
     <string name="wrong_question_retry_action">进入重练</string>
     <string name="practice_draft_expired">题目已失效，请重新选择</string>
@@ -157,6 +166,9 @@
     <string name="product_redeem_confirm_action">确认兑换</string>
     <string name="orders_title">兑换记录</string>
     <string name="orders_placeholder">兑换记录功能即将接入</string>
+    <string name="orders_empty_title">还没有兑换记录</string>
+    <string name="orders_empty_copy">去商店看看可以兑换的奖励吧。</string>
+    <string name="orders_empty_shop_action">去商店</string>
     <string name="orders_page_changed">兑换记录已更新，请重试</string>
     <string name="order_number">订单号：%1$s</string>
     <string name="order_status">状态：%1$s</string>
@@ -190,4 +202,10 @@
     <string name="tab_practice">练习</string>
     <string name="tab_shop">商店</string>
     <string name="tab_profile">我的</string>
+    <string name="language_all">全部语言</string>
+    <string name="language_english">英语</string>
+    <string name="language_japanese">日语</string>
+    <string name="language_italian">意大利语</string>
+    <string name="language_french">法语</string>
+    <string name="language_german">德语</string>
 </resources>

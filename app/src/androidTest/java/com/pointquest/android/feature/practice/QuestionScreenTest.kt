@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -20,7 +21,9 @@ import com.pointquest.android.app.PracticeMode
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.model.QuestionOption
+import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.core.ui.theme.PointQuestTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -179,6 +182,55 @@ class QuestionScreenTest {
 
         composeRule.onNodeWithText("第 2 / 2 题").assertIsDisplayed()
         composeRule.onNodeWithText("上一题").assertIsEnabled()
+    }
+
+    @Test
+    fun wrongQuestionsEmptyStateOffersFirstPracticeAndPreviewActions() {
+        var firstPracticeOpened = false
+        var previewOpened = false
+        composeRule.setContent {
+            PointQuestTheme {
+                WrongQuestionsScreen(
+                    state = WrongQuestionsUiState(loading = false),
+                    onRetry = {},
+                    onLoadMore = {},
+                    onSelectQuestion = {},
+                    onNoticeShown = {},
+                    onFirstPractice = { firstPracticeOpened = true },
+                    onPreview = { previewOpened = true },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("错题本还是空的").assertIsDisplayed()
+        composeRule.onNodeWithText("首次答题").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("开始预习").assertIsDisplayed().performClick()
+        assertTrue(firstPracticeOpened)
+        assertTrue(previewOpened)
+    }
+
+    @Test
+    fun wrongQuestionsErrorStateKeepsRetryOnly() {
+        composeRule.setContent {
+            PointQuestTheme {
+                WrongQuestionsScreen(
+                    state = WrongQuestionsUiState(
+                        loading = false,
+                        error = UiText.Dynamic("错题加载失败"),
+                    ),
+                    onRetry = {},
+                    onLoadMore = {},
+                    onSelectQuestion = {},
+                    onNoticeShown = {},
+                    onFirstPractice = {},
+                    onPreview = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("重试").assertIsDisplayed()
+        composeRule.onNodeWithText("首次答题").assertDoesNotExist()
+        composeRule.onNodeWithText("开始预习").assertDoesNotExist()
     }
 
     private companion object {

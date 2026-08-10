@@ -32,6 +32,7 @@ fun HomeScreen(
     state: HomeUiState,
     onRetry: () -> Unit,
     onStartPractice: () -> Unit,
+    onPreview: () -> Unit = {},
     onWrongQuestions: () -> Unit,
     onOrders: () -> Unit,
     onPoints: () -> Unit,
@@ -107,6 +108,31 @@ fun HomeScreen(
                             Text(stringResource(R.string.home_progress_copy, summary.firstAnsweredCount, summary.activeTotal))
                             Text(stringResource(R.string.home_unanswered_copy, summary.unansweredCount))
                             Text(stringResource(R.string.home_wrong_copy, summary.pendingWrongCount, summary.masteredWrongCount))
+                        }
+                    }
+                }
+                if (summary.unansweredCount == 0 && summary.pendingWrongCount == 0) {
+                    item {
+                        PointCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(
+                                    stringResource(R.string.home_empty_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    stringResource(R.string.home_empty_copy),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Button(
+                                    onClick = onPreview,
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                ) { Text(stringResource(R.string.home_preview_action)) }
+                                Button(
+                                    onClick = onStartPractice,
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(),
+                                ) { Text(stringResource(R.string.home_start_practice)) }
+                            }
                         }
                     }
                 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +47,7 @@ fun OrderListScreen(
     onLoadMore: () -> Unit,
     onOrderClick: (Order) -> Unit,
     onBack: () -> Unit,
+    onShop: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.orders_title), modifier = modifier) { padding ->
@@ -59,7 +61,12 @@ fun OrderListScreen(
                 state.empty -> AsyncState.Empty
                 else -> AsyncState.Content(state.items)
             }
-            AsyncContent(asyncState, onRetry, Modifier.fillMaxSize()) { orders ->
+            AsyncContent(
+                state = asyncState,
+                onRetry = onRetry,
+                modifier = Modifier.fillMaxSize(),
+                emptyContent = { OrdersEmptyState(onShop, Modifier.fillMaxSize()) },
+            ) { orders ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
@@ -82,6 +89,32 @@ fun OrderListScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrdersEmptyState(onShop: () -> Unit, modifier: Modifier) {
+    Column(
+        modifier = modifier.padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        PointCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    stringResource(R.string.orders_empty_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(R.string.orders_empty_copy),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = onShop,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text(stringResource(R.string.orders_empty_shop_action)) }
             }
         }
     }

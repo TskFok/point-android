@@ -9,11 +9,16 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.pointquest.android.R
+import com.pointquest.android.core.model.PracticeSummary
 import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.core.ui.theme.PointQuestTheme
+import com.pointquest.android.feature.home.HomeScreen
+import com.pointquest.android.feature.home.HomeUiState
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -114,5 +119,65 @@ class AuthScreenTest {
             SemanticsMatcher.expectValue(SemanticsProperties.Password, Unit),
         )
         composeRule.onNodeWithTag("register_submit").assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun homeCompletedSummaryOffersPreviewAction() {
+        var previewOpened = false
+        composeRule.setContent {
+            PointQuestTheme {
+                HomeScreen(
+                    state = HomeUiState(
+                        username = "student",
+                        loading = false,
+                        summary = PracticeSummary(
+                            activeTotal = 3,
+                            balance = 42,
+                            firstAnsweredCount = 3,
+                            masteredWrongCount = 2,
+                            pendingWrongCount = 0,
+                            unansweredCount = 0,
+                        ),
+                    ),
+                    onRetry = {},
+                    onStartPractice = {},
+                    onPreview = { previewOpened = true },
+                    onWrongQuestions = {},
+                    onOrders = {},
+                    onPoints = {},
+                    bottomBar = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("暂无待练内容").assertIsDisplayed()
+        composeRule.onNodeWithText("开始预习").assertIsDisplayed().performClick()
+        assertTrue(previewOpened)
+    }
+
+    @Test
+    fun homeErrorShowsRetryWithoutPreviewAction() {
+        composeRule.setContent {
+            PointQuestTheme {
+                HomeScreen(
+                    state = HomeUiState(
+                        username = "student",
+                        loading = false,
+                        error = UiText.Dynamic("概览加载失败"),
+                        canRetry = true,
+                    ),
+                    onRetry = {},
+                    onStartPractice = {},
+                    onPreview = {},
+                    onWrongQuestions = {},
+                    onOrders = {},
+                    onPoints = {},
+                    bottomBar = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("重试").assertIsDisplayed()
+        composeRule.onNodeWithText("开始预习").assertDoesNotExist()
     }
 }

@@ -2,11 +2,15 @@ package com.pointquest.android.feature.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pointquest.android.R
 import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStatus
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.User
+import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.data.auth.AuthRepository
+import com.pointquest.android.data.preferences.LearnerLanguageStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +20,8 @@ import kotlinx.coroutines.launch
 
 data class ProfileUiState(
     val user: User? = null,
+    val language: LearnerLanguage = LearnerLanguage.ALL,
+    val languagePersistenceError: UiText? = null,
     val showLogoutConfirmation: Boolean = false,
     val loggingOut: Boolean = false,
 )
@@ -23,13 +29,24 @@ data class ProfileUiState(
 class ProfileViewModel(
     private val authRepository: AuthRepository,
     sessionState: SessionState,
+    private val learnerLanguageStore: LearnerLanguageStore,
     private val scopeOverride: CoroutineScope? = null,
     private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
-    private val mutableUiState = MutableStateFlow(ProfileUiState())
+    private val mutableUiState = MutableStateFlow(
+        ProfileUiState(language = learnerLanguageStore.language.value),
+    )
     val uiState: StateFlow<ProfileUiState> = mutableUiState
 
     init {
+        scope.launch {
+            learnerLanguageStore.language.collect { language ->
+                mutableUiState.value = mutableUiState.value.copy(
+                    language = language,
+                    languagePersistenceError = null,
+                )
+            }
+        }
         scope.launch {
             val syncState = appDataSync?.state
             if (syncState == null) {
@@ -50,6 +67,18 @@ class ProfileViewModel(
                         )
                     }
             }
+        }
+    }
+
+    fun setLanguage(language: LearnerLanguage) {
+        if (language == mutableUiState.value.language) {
+            mutableUiState.value = mutableUiState.value.copy(languagePersistenceError = null)
+            return
+        }
+        if (!learnerLanguageStore.setLanguage(language)) {
+            mutableUiState.value = mutableUiState.value.copy(
+                languagePersistenceError = UiText.Resource(R.string.profile_language_save_failed),
+            )
         }
     }
 

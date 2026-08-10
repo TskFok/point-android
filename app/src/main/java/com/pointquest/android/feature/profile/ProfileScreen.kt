@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.pointquest.android.R
+import com.pointquest.android.core.model.LearnerLanguage
+import com.pointquest.android.core.ui.asString
 import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointScaffold
 
@@ -29,6 +32,7 @@ fun ProfileScreen(
     onRequestLogout: () -> Unit,
     onDismissLogout: () -> Unit,
     onConfirmLogout: () -> Unit,
+    onLanguageChange: (LearnerLanguage) -> Unit,
     bottomBar: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -47,7 +51,35 @@ fun ProfileScreen(
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(state.user?.username.orEmpty(), style = MaterialTheme.typography.headlineSmall)
                         Text(stringResource(R.string.profile_student_role))
+                        SelectionContainer {
+                            Text(stringResource(R.string.profile_account_id, state.user?.id.orEmpty()))
+                        }
                         Text(stringResource(R.string.profile_points, state.user?.pointsBalance ?: 0))
+                    }
+                }
+            }
+            item {
+                PointCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            stringResource(R.string.profile_language_title),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        LearnerLanguage.entries.forEach { language ->
+                            LanguageAction(
+                                text = stringResource(language.labelRes()),
+                                selected = language == state.language,
+                                enabled = !state.loggingOut,
+                            ) {
+                                onLanguageChange(language)
+                            }
+                        }
+                        state.languagePersistenceError?.let { error ->
+                            Text(
+                                text = error.asString(),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
                 }
             }
@@ -94,4 +126,27 @@ private fun ProfileAction(text: String, enabled: Boolean, onClick: () -> Unit) {
         enabled = enabled,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
     ) { Text(text) }
+}
+
+@Composable
+private fun LanguageAction(text: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+    if (selected) {
+        Button(onClick = onClick, enabled = enabled, modifier = modifier) {
+            Text(stringResource(R.string.profile_language_selected, text))
+        }
+    } else {
+        OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+            Text(text)
+        }
+    }
+}
+
+private fun LearnerLanguage.labelRes(): Int = when (this) {
+    LearnerLanguage.ALL -> R.string.language_all
+    LearnerLanguage.EN -> R.string.language_english
+    LearnerLanguage.JA -> R.string.language_japanese
+    LearnerLanguage.IT -> R.string.language_italian
+    LearnerLanguage.FR -> R.string.language_french
+    LearnerLanguage.DE -> R.string.language_german
 }

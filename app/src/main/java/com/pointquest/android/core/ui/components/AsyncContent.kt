@@ -40,12 +40,13 @@ fun <T> AsyncContent(
     state: AsyncState<T>,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    emptyContent: @Composable () -> Unit = { MessageCard(stringResource(R.string.empty_state), modifier) },
     content: @Composable (T) -> Unit,
 ) {
     when (state) {
         AsyncState.Loading -> LoadingState(modifier)
         is AsyncState.Content -> Box(modifier) { content(state.value) }
-        AsyncState.Empty -> MessageCard(stringResource(R.string.empty_state), modifier)
+        AsyncState.Empty -> emptyContent()
         is AsyncState.Error -> ErrorState(state.message, onRetry, modifier)
     }
 }

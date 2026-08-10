@@ -5,6 +5,7 @@ import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.ActiveSession
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PracticeSummary
 import com.pointquest.android.core.model.Question
@@ -14,7 +15,9 @@ import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
+import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.data.practice.PracticeRepository
+import com.pointquest.android.test.FakeLearnerLanguageStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -218,6 +221,150 @@ class QuestionViewModelTest {
     }
 
     @Test
+    fun goingBackKeepsSelectionAndResultWithoutSubmittingAgain() = runBlocking {
+        val firstAnswer = sampleAnswer(correct = true, selectedOptionId = "o1")
+        val secondAnswer = sampleAnswer(correct = false, selectedOptionId = "o2")
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(successQuestion("q1"), successQuestion("q2")),
+            firstAnswerResults = arrayDequeOf(
+                AppResult.Success(firstAnswer),
+                AppResult.Success(secondAnswer),
+            ),
+        )
+        val viewModel = firstViewModel(repository)
+        viewModel.initialize()?.join()
+        viewModel.selectOption("o1")
+        viewModel.submit()?.join()
+        viewModel.goNext()?.join()
+        viewModel.selectOption("o2")
+        viewModel.submit()?.join()
+
+        viewModel.goPrevious()
+
+        assertEquals("q1", viewModel.uiState.value.question?.id)
+        assertEquals("o1", viewModel.uiState.value.selectedOptionId)
+        assertEquals(firstAnswer, viewModel.uiState.value.result)
+        assertEquals(2, repository.firstAnswerCalls.size)
+    }
+
+    @Test
+    fun tailLoadExcludesQueuedIdsCompletesAndNewViewModelStartsFreshSession() = runBlocking {
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(
+                successQuestion("q1"),
+                successQuestion("q2"),
+                failure("NO_UNANSWERED_QUESTIONS"),
+                successQuestion("q3"),
+            ),
+            firstAnswerResults = arrayDequeOf(
+                AppResult.Success(sampleAnswer(correct = true, selectedOptionId = "o1")),
+                AppResult.Success(sampleAnswer(correct = true, selectedOptionId = "o2")),
+            ),
+        )
+        val viewModel = firstViewModel(repository)
+        viewModel.initialize()?.join()
+        viewModel.selectOption("o1")
+        viewModel.submit()?.join()
+        viewModel.goNext()?.join()
+        viewModel.selectOption("o2")
+        viewModel.submit()?.join()
+
+        viewModel.goNext()?.join()
+        viewModel.goNext()?.join()
+
+        assertEquals(
+            listOf(emptyList<String>(), listOf("q1"), listOf("q1", "q2")),
+            repository.excludeCalls.take(3),
+        )
+        assertTrue(viewModel.uiState.value.completed)
+        assertEquals(2, repository.firstAnswerCalls.size)
+
+        val secondViewModel = firstViewModel(repository)
+        secondViewModel.initialize()?.join()
+
+        assertEquals("q3", secondViewModel.uiState.value.question?.id)
+        assertEquals(emptyList<String>(), repository.excludeCalls.last())
+        assertEquals(1, secondViewModel.uiState.value.queue.size)
+    }
+
+    @Test
+    fun tailLoadFailureKeepsHistoryAndRetryAppendsNextQuestion() = runBlocking {
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(
+                successQuestion("q1"),
+                failure("SERVICE_UNAVAILABLE"),
+                successQuestion("q2"),
+            ),
+            firstAnswerResults = arrayDequeOf(AppResult.Success(sampleAnswer(correct = true, selectedOptionId = "o1"))),
+        )
+        val viewModel = firstViewModel(repository)
+        viewModel.initialize()?.join()
+        viewModel.selectOption("o1")
+        viewModel.submit()?.join()
+
+        viewModel.goNext()?.join()
+
+        assertEquals("q1", viewModel.uiState.value.question?.id)
+        assertEquals(listOf("q1"), viewModel.uiState.value.queue.map { it.question.id })
+        assertEquals(listOf("q1"), repository.excludeCalls.last())
+        assertEquals(UiText.Dynamic("SERVICE_UNAVAILABLE"), viewModel.uiState.value.tailError)
+
+        viewModel.retryTailLoad()?.join()
+
+        assertEquals("q2", viewModel.uiState.value.question?.id)
+        assertEquals(listOf("q1", "q2"), viewModel.uiState.value.queue.map { it.question.id })
+        assertNull(viewModel.uiState.value.tailError)
+    }
+
+    @Test
+    fun changingLanguageResetsFirstQueueAndIgnoresStaleQuestionResponse() = runBlocking {
+        val staleQuestion = CompletableDeferred<AppResult<Question>>()
+        val store = FakeLearnerLanguageStore(LearnerLanguage.ALL)
+        val repository = FakePracticeRepository(
+            nextResults = arrayDequeOf(
+                DeferredResult(staleQuestion),
+                ImmediateResult(successQuestion("fr")),
+            ),
+        )
+        val viewModel = firstViewModel(repository, store)
+
+        val staleJob = viewModel.initialize()
+        store.setLanguage(LearnerLanguage.FR)
+        viewModel.loadJob?.join()
+        staleQuestion.complete(successQuestion("all"))
+        staleJob?.join()
+
+        assertEquals("fr", viewModel.uiState.value.question?.id)
+        assertEquals(listOf("fr"), viewModel.uiState.value.queue.map { it.question.id })
+        assertEquals(listOf(LearnerLanguage.ALL, LearnerLanguage.FR), repository.nextQuestionCalls.map { it.language })
+        assertEquals(emptyList<String>(), repository.nextQuestionCalls.last().excludeIds)
+    }
+
+    @Test
+    fun retrySubmitReusesOriginalOptionAndSubmissionKeyAfterFailure() = runBlocking {
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(successQuestion("q1")),
+            firstAnswerResults = arrayDequeOf(
+                failure("SERVICE_UNAVAILABLE"),
+                AppResult.Success(sampleAnswer(correct = true, selectedOptionId = "o1")),
+            ),
+        )
+        val viewModel = firstViewModel(repository)
+        viewModel.initialize()?.join()
+        viewModel.selectOption("o1")
+        viewModel.submit()?.join()
+        val originalKey = repository.firstAnswerCalls.single().key
+
+        viewModel.selectOption("o2")
+        viewModel.retrySubmit()?.join()
+
+        assertEquals(listOf("o1", "o1"), repository.firstAnswerCalls.map { it.optionId })
+        assertEquals(listOf(originalKey, originalKey), repository.firstAnswerCalls.map { it.key })
+        assertEquals(sampleAnswer(correct = true, selectedOptionId = "o1"), viewModel.uiState.value.result)
+        assertNull(viewModel.uiState.value.currentItem?.submitError)
+    }
+
+    @Test
     fun alreadyAnsweredAutomaticallyLoadsNextQuestionWithCurrentIdExcluded() = runBlocking {
         val repository = FakePracticeRepository(
             nextResults = loadResults(successQuestion("q1"), successQuestion("q2")),
@@ -249,20 +396,24 @@ class QuestionViewModelTest {
     }
 
     @Test
-    fun excludeIdsAreStableDistinctAndLimitedToMostRecentFifty() = runBlocking {
-        val results = ArrayDeque<LoadResult>()
-        (1..52).forEach { results += ImmediateResult(successQuestion("q$it")) }
-        results += ImmediateResult(successQuestion("q2"))
-        results += ImmediateResult(successQuestion("last"))
-        val repository = FakePracticeRepository(nextResults = results)
-        val viewModel = firstViewModel(repository)
-
-        repeat(54) { viewModel.loadFirstQuestion().join() }
-
-        assertEquals(
-            (4..52).map { "q$it" } + "q2",
-            repository.excludeCalls.last(),
+    fun loadFirstQuestionStartsNewSessionWithEmptyExcludes() = runBlocking {
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(successQuestion("q1"), successQuestion("q2"), successQuestion("q3")),
+            firstAnswerResults = arrayDequeOf(
+                AppResult.Success(sampleAnswer(correct = true, selectedOptionId = "o1")),
+            ),
         )
+        val viewModel = firstViewModel(repository)
+        viewModel.initialize()?.join()
+        viewModel.selectOption("o1")
+        viewModel.submit()?.join()
+        viewModel.goNext()?.join()
+
+        viewModel.loadFirstQuestion().join()
+
+        assertEquals("q3", viewModel.uiState.value.question?.id)
+        assertEquals(listOf("q3"), viewModel.uiState.value.queue.map { it.question.id })
+        assertEquals(emptyList<String>(), repository.excludeCalls.last())
     }
 
     @Test
@@ -329,12 +480,16 @@ class QuestionViewModelTest {
         assertFalse(viewModel.uiState.value.submitted)
     }
 
-    private fun firstViewModel(repository: PracticeRepository) = QuestionViewModel(
+    private fun firstViewModel(
+        repository: PracticeRepository,
+        languageStore: FakeLearnerLanguageStore = FakeLearnerLanguageStore(LearnerLanguage.ALL),
+    ) = QuestionViewModel(
         repository = repository,
         mode = PracticeMode.FIRST,
         draftStore = null,
         questionId = null,
         scopeOverride = CoroutineScope(Job() + Dispatchers.Unconfined),
+        learnerLanguageStore = languageStore,
     )
 
     private sealed interface LoadResult
@@ -345,6 +500,17 @@ class QuestionViewModelTest {
         val result: CompletableDeferred<AppResult<Question>>,
     ) : LoadResult
 
+    private data class NextQuestionCall(
+        val excludeIds: List<String>,
+        val language: LearnerLanguage,
+    )
+
+    private data class AnswerFirstCall(
+        val questionId: String,
+        val optionId: String,
+        val key: String?,
+    )
+
     private class FakePracticeRepository(
         val nextResults: ArrayDeque<LoadResult> = ArrayDeque(),
         val firstAnswerResults: ArrayDeque<AppResult<AnswerResult>> = ArrayDeque(),
@@ -353,18 +519,27 @@ class QuestionViewModelTest {
         val beforeFirstAnswer: (suspend () -> Unit)? = null,
     ) : PracticeRepository {
         val excludeCalls = mutableListOf<List<String>>()
-        val firstAnswerCalls = mutableListOf<Pair<String, String>>()
+        val nextQuestionCalls = mutableListOf<NextQuestionCall>()
+        val firstAnswerCalls = mutableListOf<AnswerFirstCall>()
 
-        override suspend fun nextQuestion(excludeIds: List<String>): AppResult<Question> {
+        override suspend fun nextQuestion(
+            excludeIds: List<String>,
+            language: LearnerLanguage,
+        ): AppResult<Question> {
             excludeCalls += excludeIds.toList()
+            nextQuestionCalls += NextQuestionCall(excludeIds.toList(), language)
             return when (val result = nextResults.removeFirst()) {
                 is ImmediateResult -> result.result
                 is DeferredResult -> withContext(NonCancellable) { result.result.await() }
             }
         }
 
-        override suspend fun answerFirst(questionId: String, selectedOptionId: String): AppResult<AnswerResult> {
-            firstAnswerCalls += questionId to selectedOptionId
+        override suspend fun answerFirst(
+            questionId: String,
+            selectedOptionId: String,
+            idempotencyKey: String?,
+        ): AppResult<AnswerResult> {
+            firstAnswerCalls += AnswerFirstCall(questionId, selectedOptionId, idempotencyKey)
             beforeFirstAnswer?.invoke()
             return firstAnswerDeferred?.let { withContext(NonCancellable) { it.await() } }
                 ?: firstAnswerResults.removeFirst()

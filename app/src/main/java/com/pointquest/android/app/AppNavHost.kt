@@ -325,6 +325,7 @@ fun AppNavHost(
                             draftStore = container.practiceDraftStore,
                             questionId = route.questionId,
                             appDataSync = container.appDataSync,
+                            learnerLanguageStore = container.learnerLanguageStore,
                         )
                     }
                 }
@@ -365,12 +366,13 @@ fun AppNavHost(
                     state = state,
                     onSelectOption = questionViewModel::selectOption,
                     onSubmit = { questionViewModel.submit() },
+                    onPrevious = questionViewModel::goPrevious,
                     onNext = {
                         when (route.mode) {
-                            PracticeMode.FIRST -> if (state.completed) {
+                            PracticeMode.FIRST -> if (state.completed && state.question == null) {
                                 if (!navController.popBackStack()) navController.navigate(AppRoute.Practice)
                             } else {
-                                questionViewModel.loadFirstQuestion()
+                                questionViewModel.goNext()
                             }
                             PracticeMode.WRONG -> if (!navController.popBackStack()) {
                                 navController.navigate(AppRoute.WrongQuestions)
@@ -378,6 +380,7 @@ fun AppNavHost(
                         }
                     },
                     onRetry = questionViewModel::load,
+                    onRetryTailLoad = { questionViewModel.retryTailLoad() },
                 )
             }
         }

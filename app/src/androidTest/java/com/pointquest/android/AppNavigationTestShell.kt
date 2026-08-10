@@ -13,6 +13,7 @@ import com.pointquest.android.core.auth.ActiveSession
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.auth.SessionStatus
 import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.Order
 import com.pointquest.android.core.model.OrderStatus
 import com.pointquest.android.core.model.Page
@@ -34,10 +35,14 @@ import com.pointquest.android.data.auth.AuthRepository
 import com.pointquest.android.data.orders.OrdersRepository
 import com.pointquest.android.data.points.PointsRepository
 import com.pointquest.android.data.practice.PracticeRepository
+import com.pointquest.android.data.preferences.LearnerLanguageStore
 import com.pointquest.android.data.products.ProductImageUrlFactory
 import com.pointquest.android.data.products.ProductsRepository
 import com.pointquest.android.feature.practice.PracticeDraftStore
 import java.time.Instant
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 @Composable
 internal fun AppNavigationTestShell(
@@ -95,6 +100,15 @@ internal class FakeAppDependencies(
     }
     override val appDataSync = AppDataSync(sessionState)
     override val practiceDraftStore = PracticeDraftStore()
+    private val mutableLearnerLanguage = MutableStateFlow(LearnerLanguage.ALL)
+    override val learnerLanguageStore: LearnerLanguageStore = object : LearnerLanguageStore {
+        override val language: StateFlow<LearnerLanguage> = mutableLearnerLanguage.asStateFlow()
+
+        override fun setLanguage(value: LearnerLanguage): Boolean {
+            mutableLearnerLanguage.value = value
+            return true
+        }
+    }
     private val remoteHostPersistence = object : RemoteHostPersistence {
         private var host: String? = null
 
@@ -127,13 +141,18 @@ internal class FakeAppDependencies(
     }
 
     override val practiceRepository: PracticeRepository = object : PracticeRepository {
-        override suspend fun summary() = AppResult.Success(
+        override suspend fun summary(language: LearnerLanguage) = AppResult.Success(
             PracticeSummary(10, 42, 3, 1, 2, 7),
         )
-        override suspend fun nextQuestion(excludeIds: List<String>) = AppResult.Success(question)
-        override suspend fun answerFirst(questionId: String, selectedOptionId: String) =
+        override suspend fun nextQuestion(excludeIds: List<String>, language: LearnerLanguage) =
+            AppResult.Success(question)
+        override suspend fun answerFirst(
+            questionId: String,
+            selectedOptionId: String,
+            idempotencyKey: String?,
+        ) =
             AppResult.Success(answer)
-        override suspend fun wrongQuestions(page: Int) =
+        override suspend fun wrongQuestions(page: Int, language: LearnerLanguage) =
             AppResult.Success(Page<WrongQuestion>(emptyList(), PageMeta(page, 20, 0, 0)))
         override suspend fun answerWrong(questionId: String, selectedOptionId: String) =
             AppResult.Success(answer)

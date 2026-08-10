@@ -7,6 +7,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -34,11 +35,17 @@ class QuestionScreenTest {
         composeRule.setContent {
             PointQuestTheme {
                 QuestionScreen(
-                    state = QuestionUiState(mode = PracticeMode.FIRST, loading = false, question = question),
+                    state = QuestionUiState(
+                        mode = PracticeMode.FIRST,
+                        loading = false,
+                        queue = listOf(queueItem(question)),
+                    ),
                     onSelectOption = {},
                     onSubmit = {},
+                    onPrevious = {},
                     onNext = {},
                     onRetry = {},
+                    onRetryTailLoad = {},
                 )
             }
         }
@@ -57,15 +64,21 @@ class QuestionScreenTest {
                     state = QuestionUiState(
                         mode = PracticeMode.FIRST,
                         loading = false,
-                        question = question,
-                        selectedOptionId = "o1",
-                        submitted = true,
-                        result = result,
+                        queue = listOf(
+                            queueItem(
+                                question = question,
+                                selectedOptionId = "o1",
+                                submissionOptionId = "o1",
+                                result = result,
+                            ),
+                        ),
                     ),
                     onSelectOption = {},
                     onSubmit = {},
+                    onPrevious = {},
                     onNext = {},
                     onRetry = {},
+                    onRetryTailLoad = {},
                 )
             }
         }
@@ -88,11 +101,17 @@ class QuestionScreenTest {
             PointQuestTheme {
                 CompositionLocalProvider(LocalDensity provides Density(1f, fontScale = 2.2f)) {
                     QuestionScreen(
-                        state = QuestionUiState(mode = PracticeMode.FIRST, loading = false, question = question),
+                        state = QuestionUiState(
+                            mode = PracticeMode.FIRST,
+                            loading = false,
+                            queue = listOf(queueItem(question)),
+                        ),
                         onSelectOption = {},
                         onSubmit = {},
+                        onPrevious = {},
                         onNext = {},
                         onRetry = {},
+                        onRetryTailLoad = {},
                     )
                 }
             }
@@ -100,6 +119,66 @@ class QuestionScreenTest {
 
         composeRule.onNodeWithText("这是一个较长的选项内容，用来验证大字体不会被裁切").assertIsDisplayed()
         composeRule.onNodeWithTag("question_option_o1").assertHeightIsAtLeast(64.dp)
+    }
+
+    @Test
+    fun queueNavigationShowsProgressAndKeepsSubmittedResultVisible() {
+        composeRule.setContent {
+            PointQuestTheme {
+                QuestionScreen(
+                    state = QuestionUiState(
+                        mode = PracticeMode.FIRST,
+                        loading = false,
+                        queue = listOf(
+                            queueItem(
+                                question = question,
+                                selectedOptionId = "o1",
+                                submissionOptionId = "o1",
+                                result = result,
+                            ),
+                            queueItem(successQuestion("q2"), selectedOptionId = "o2"),
+                        ),
+                        currentIndex = 0,
+                    ),
+                    onSelectOption = {},
+                    onSubmit = {},
+                    onPrevious = {},
+                    onNext = {},
+                    onRetry = {},
+                    onRetryTailLoad = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("第 1 / 2 题").assertIsDisplayed()
+        composeRule.onNodeWithText("上一题").assertIsNotEnabled()
+        composeRule.onNodeWithText("下一题").assertIsEnabled()
+        composeRule.onNodeWithText("你的答案不正确").assertIsDisplayed()
+    }
+
+    @Test
+    fun secondQuestionEnablesPreviousNavigation() {
+        composeRule.setContent {
+            PointQuestTheme {
+                QuestionScreen(
+                    state = QuestionUiState(
+                        mode = PracticeMode.FIRST,
+                        loading = false,
+                        queue = listOf(queueItem(question), queueItem(successQuestion("q2"))),
+                        currentIndex = 1,
+                    ),
+                    onSelectOption = {},
+                    onSubmit = {},
+                    onPrevious = {},
+                    onNext = {},
+                    onRetry = {},
+                    onRetryTailLoad = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("第 2 / 2 题").assertIsDisplayed()
+        composeRule.onNodeWithText("上一题").assertIsEnabled()
     }
 
     private companion object {
@@ -120,6 +199,30 @@ class QuestionScreenTest {
             explanation = "1 + 1 = 2",
             pointsAwarded = 0,
             selectedOptionId = "o1",
+        )
+
+        fun queueItem(
+            question: Question,
+            selectedOptionId: String? = null,
+            submissionOptionId: String? = null,
+            result: AnswerResult? = null,
+        ) = QuestionQueueItem(
+            question = question,
+            selectedOptionId = selectedOptionId,
+            submissionKey = "key-${question.id}",
+            submissionOptionId = submissionOptionId,
+            result = result,
+            submitError = null,
+        )
+
+        fun successQuestion(id: String) = Question(
+            id = id,
+            stem = "2 + 2 等于多少？",
+            basePoints = 5,
+            options = listOf(
+                QuestionOption("o1", "A", "3", 1),
+                QuestionOption("o2", "B", "4", 2),
+            ),
         )
     }
 }

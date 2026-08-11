@@ -244,6 +244,14 @@ class QuestionScreenTest {
                     state = QuestionUiState(
                         mode = PracticeMode.FIRST,
                         loading = false,
+                        queue = listOf(
+                            queueItem(
+                                question = question,
+                                selectedOptionId = "o2",
+                                submissionOptionId = "o2",
+                                result = result.copy(correct = true, selectedOptionId = "o2"),
+                            ),
+                        ),
                         completed = true,
                     ),
                     onSelectOption = {},

@@ -50,6 +50,12 @@ fun QuestionScreen(
                 val loading = stringResource(R.string.loading)
                 CircularProgressIndicator(Modifier.semantics { contentDescription = loading })
             }
+            state.completed -> PracticeCompleted(
+                onPractice = onNext,
+                onWrongQuestions = onWrongQuestions,
+                onPreview = onPreview,
+                modifier = Modifier.padding(padding),
+            )
             state.question != null -> {
                 val question = checkNotNull(state.question)
                 LazyColumn(
@@ -139,12 +145,6 @@ fun QuestionScreen(
                 }
                 }
             }
-            state.completed -> PracticeCompleted(
-                onPractice = onNext,
-                onWrongQuestions = onWrongQuestions,
-                onPreview = onPreview,
-                modifier = Modifier.padding(padding),
-            )
             state.question == null && state.error != null -> QuestionError(state, onRetry, Modifier.padding(padding))
             else -> QuestionError(state, onRetry, Modifier.padding(padding))
         }

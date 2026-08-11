@@ -37,7 +37,29 @@ if [[ ! -f "$APK_PATH" ]]; then
   exit 1
 fi
 
-TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+if [[ -z "$SDK_ROOT" || ! -d "$SDK_ROOT/build-tools" ]]; then
+  echo "未找到 Android SDK Build Tools，请检查 ANDROID_SDK_ROOT 或 ANDROID_HOME。"
+  exit 1
+fi
+
+BUILD_TOOLS_VERSION="$(
+  find "$SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; |
+    sort -t. -k1,1n -k2,2n -k3,3n |
+    tail -n 1
+)"
+BUILD_TOOLS_DIR="$SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION"
+AAPT2="$BUILD_TOOLS_DIR/aapt2"
+APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+
+if [[ ! -x "$AAPT2" || ! -x "$APKSIGNER" ]]; then
+  echo "Android SDK Build Tools 缺少 aapt2 或 apksigner: $BUILD_TOOLS_DIR"
+  exit 1
+fi
+
+"$AAPT2" dump badging "$APK_PATH" >/dev/null
+"$APKSIGNER" verify "$APK_PATH"
+
 APK_NAME="${VARIANT}.apk"
 DEST_PATH="./${APK_NAME}"
 

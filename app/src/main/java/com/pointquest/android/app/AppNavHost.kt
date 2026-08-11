@@ -405,7 +405,7 @@ fun AppNavHost(
                     onPrevious = questionViewModel::goPrevious,
                     onNext = {
                         when (route.mode) {
-                            PracticeMode.FIRST -> if (state.completed && state.question == null) {
+                            PracticeMode.FIRST -> if (state.completed) {
                                 if (!navController.popBackStack()) navController.navigate(AppRoute.Practice)
                             } else {
                                 questionViewModel.goNext()

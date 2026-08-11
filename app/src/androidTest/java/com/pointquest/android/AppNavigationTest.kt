@@ -9,11 +9,13 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertTextContains
 import androidx.navigation.NavHostController
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.pointquest.android.app.AppRoute
 import com.pointquest.android.core.auth.SessionStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -169,5 +171,34 @@ class AppNavigationTest {
         composeRule.runOnUiThread { navController.popBackStack() }
         composeRule.onNodeWithText("首次答题").assertIsDisplayed()
         composeRule.onNodeWithText("错题重练").assertIsDisplayed()
+    }
+
+    @Test
+    fun completedFirstPracticeWithCurrentQuestionReturnsToPracticeHub() {
+        val dependencies = FakeAppDependencies(noUnansweredQuestionsAfterFirstQuestion = true)
+        lateinit var navController: NavHostController
+        composeRule.setContent {
+            navController = rememberNavController()
+            AppNavigationTestShell(
+                session = FakeAppSession(SessionStatus.SignedIn(testStudent())),
+                navController = navController,
+                dependencies = dependencies,
+            )
+        }
+
+        composeRule.runOnUiThread { navController.navigate(AppRoute.Practice) }
+        composeRule.onNodeWithText("首次答题").performClick()
+        composeRule.onNodeWithText("1 + 1 等于几？").assertIsDisplayed()
+        composeRule.onNodeWithTag("question_option_option-2").performClick()
+        composeRule.onNodeWithTag("question_submit").performClick()
+        composeRule.onNodeWithText("回答正确").assertIsDisplayed()
+        composeRule.onNodeWithText("下一题").performClick()
+        composeRule.onNodeWithText("返回练习").assertIsDisplayed().performClick()
+
+        composeRule.onNodeWithText("首次答题").assertIsDisplayed()
+        composeRule.onNodeWithText("返回练习").assertDoesNotExist()
+        composeRule.runOnIdle {
+            assertTrue(navController.currentDestination?.hasRoute<AppRoute.Practice>() == true)
+        }
     }
 }

@@ -26,6 +26,7 @@ import com.pointquest.android.core.model.QuestionOption
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.model.WrongQuestion
+import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.network.RemoteHostPersistence
 import com.pointquest.android.core.network.RemoteHostStore
@@ -81,6 +82,7 @@ internal fun testStudent() = User(
 
 internal class FakeAppDependencies(
     private val onLogin: (User) -> Unit = {},
+    private val noUnansweredQuestionsAfterFirstQuestion: Boolean = false,
 ) : AppDependencies {
     var registerCalls: Int = 0
         private set
@@ -141,11 +143,29 @@ internal class FakeAppDependencies(
     }
 
     override val practiceRepository: PracticeRepository = object : PracticeRepository {
+        private var nextQuestionCalls = 0
+
         override suspend fun summary(language: LearnerLanguage) = AppResult.Success(
             PracticeSummary(10, 42, 3, 1, 2, 7),
         )
-        override suspend fun nextQuestion(excludeIds: List<String>, language: LearnerLanguage) =
-            AppResult.Success(question)
+        override suspend fun nextQuestion(
+            excludeIds: List<String>,
+            language: LearnerLanguage,
+        ): AppResult<Question> {
+            nextQuestionCalls += 1
+            return if (noUnansweredQuestionsAfterFirstQuestion && nextQuestionCalls > 1) {
+                AppResult.Failure(
+                    AppError(
+                        httpStatus = 404,
+                        code = "NO_UNANSWERED_QUESTIONS",
+                        message = "没有未答题目",
+                        requestId = null,
+                    ),
+                )
+            } else {
+                AppResult.Success(question)
+            }
+        }
         override suspend fun previewQuestions(count: Int, language: LearnerLanguage) =
             AppResult.Success(List(count) { index -> question.copy(id = "preview-${index + 1}") })
         override suspend fun answerFirst(

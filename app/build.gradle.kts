@@ -59,6 +59,7 @@ android {
             buildConfigField("String", "IMAGE_BASE_URL", "\"http://10.0.2.2:3000/\"")
         }
         getByName("release") {
+            signingConfig = signingConfigs.getByName("debug")
             buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
             buildConfigField("String", "IMAGE_BASE_URL", "\"$releaseImageBaseUrl\"")
         }

@@ -26,12 +26,7 @@ echo "===> 使用变体: ${VARIANT}，开始编译 APK..."
 
 if [[ "$VARIANT" == "release" ]]; then
   ./gradlew :app:assembleRelease -PpointApiBaseUrl=https://api.example.invalid/
-  # 未配置签名时产物为 app-release-unsigned.apk；若已签名则优先用 signed。
-  if [[ -f "app/build/outputs/apk/release/app-release.apk" ]]; then
-    APK_PATH="app/build/outputs/apk/release/app-release.apk"
-  else
-    APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
-  fi
+  APK_PATH="app/build/outputs/apk/release/app-release.apk"
 else
   ./gradlew :app:assembleDebug
   APK_PATH="app/build/outputs/apk/debug/app-debug.apk"

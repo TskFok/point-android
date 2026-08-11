@@ -44,18 +44,23 @@ if [[ -z "$SDK_ROOT" || ! -d "$SDK_ROOT/build-tools" ]]; then
 fi
 
 BUILD_TOOLS_VERSION="$(
-  find "$SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; |
+  for CANDIDATE_DIR in "$SDK_ROOT"/build-tools/*; do
+    [[ -d "$CANDIDATE_DIR" ]] || continue
+    CANDIDATE_VERSION="$(basename "$CANDIDATE_DIR")"
+    [[ "$CANDIDATE_VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] || continue
+    [[ -x "$CANDIDATE_DIR/aapt2" && -x "$CANDIDATE_DIR/apksigner" ]] || continue
+    printf '%s\n' "$CANDIDATE_VERSION"
+  done |
     sort -t. -k1,1n -k2,2n -k3,3n |
     tail -n 1
 )"
+if [[ -z "$BUILD_TOOLS_VERSION" ]]; then
+  echo "未找到同时包含 aapt2 和 apksigner 的稳定版 Android SDK Build Tools。"
+  exit 1
+fi
 BUILD_TOOLS_DIR="$SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION"
 AAPT2="$BUILD_TOOLS_DIR/aapt2"
 APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
-
-if [[ ! -x "$AAPT2" || ! -x "$APKSIGNER" ]]; then
-  echo "Android SDK Build Tools 缺少 aapt2 或 apksigner: $BUILD_TOOLS_DIR"
-  exit 1
-fi
 
 "$AAPT2" dump badging "$APK_PATH" >/dev/null
 "$APKSIGNER" verify "$APK_PATH"

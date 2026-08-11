@@ -134,18 +134,26 @@ git commit -m "修复发布包签名配置"
 
 - [ ] **Step 1: 为假 SDK 工具和调用日志扩展测试夹具**
 
-在 `new_fixture` 中创建 `sdk/build-tools/35.0.0/aapt2` 和 `apksigner`。两个工具将名称追加到 `${FAKE_TOOL_LOG}`，并读取独立退出码：
+在 `new_fixture` 中创建 `sdk/build-tools/35.0.0/aapt2` 和 `apksigner`。两个工具必须精确校验子命令及目标 APK，再把工具版本和 APK 路径追加到 `${FAKE_TOOL_LOG}`：
 
 ```bash
 mkdir -p "$fixture/sdk/build-tools/35.0.0"
 cat > "$fixture/sdk/build-tools/35.0.0/aapt2" <<'AAPT2'
 #!/usr/bin/env bash
-printf 'aapt2\n' >> "${FAKE_TOOL_LOG:?}"
+set -euo pipefail
+if [[ "$#" -ne 3 || "$1" != "dump" || "$2" != "badging" || ! -f "$3" ]]; then
+  exit 64
+fi
+printf 'aapt2:35.0.0:%s\n' "$3" >> "${FAKE_TOOL_LOG:?}"
 exit "${FAKE_AAPT2_EXIT:-0}"
 AAPT2
 cat > "$fixture/sdk/build-tools/35.0.0/apksigner" <<'APKSIGNER'
 #!/usr/bin/env bash
-printf 'apksigner\n' >> "${FAKE_TOOL_LOG:?}"
+set -euo pipefail
+if [[ "$#" -ne 2 || "$1" != "verify" || ! -f "$2" ]]; then
+  exit 64
+fi
+printf 'apksigner:35.0.0:%s\n' "$2" >> "${FAKE_TOOL_LOG:?}"
 exit "${FAKE_APKSIGNER_EXIT:-0}"
 APKSIGNER
 chmod +x "$fixture/sdk/build-tools/35.0.0/aapt2" \
@@ -154,7 +162,7 @@ chmod +x "$fixture/sdk/build-tools/35.0.0/aapt2" \
 
 - [ ] **Step 2: 写入 Release 失败/成功路径及 Debug 回归测试**
 
-追加以下完整测试函数，并在每次运行脚本时传入 `ANDROID_HOME="$fixture/sdk"` 与 `FAKE_TOOL_LOG="$fixture/tool.log"`：
+追加以下完整测试函数，并在每次运行脚本时传入 `ANDROID_HOME="$fixture/sdk"`、`ANDROID_SDK_ROOT="$fixture/sdk"` 与 `FAKE_TOOL_LOG="$fixture/tool.log"`：
 
 ```bash
 test_release_rejects_unparseable_apk() {
@@ -163,6 +171,7 @@ test_release_rejects_unparseable_apk() {
   printf 'previous' > "$fixture/release.apk"
   if (cd "$fixture" && \
     ANDROID_HOME="$fixture/sdk" \
+    ANDROID_SDK_ROOT="$fixture/sdk" \
     FAKE_APK_MODE=signed \
     FAKE_AAPT2_EXIT=1 \
     FAKE_APKSIGNER_EXIT=0 \
@@ -180,6 +189,7 @@ test_release_rejects_invalid_signature() {
   printf 'previous' > "$fixture/release.apk"
   if (cd "$fixture" && \
     ANDROID_HOME="$fixture/sdk" \
+    ANDROID_SDK_ROOT="$fixture/sdk" \
     FAKE_APK_MODE=signed \
     FAKE_AAPT2_EXIT=0 \
     FAKE_APKSIGNER_EXIT=1 \
@@ -196,13 +206,15 @@ test_release_validates_before_copying() {
   fixture="$(new_fixture valid-release)"
   (cd "$fixture" && \
     ANDROID_HOME="$fixture/sdk" \
+    ANDROID_SDK_ROOT="$fixture/sdk" \
     FAKE_APK_MODE=signed \
     FAKE_AAPT2_EXIT=0 \
     FAKE_APKSIGNER_EXIT=0 \
     FAKE_TOOL_LOG="$fixture/tool.log" \
     ./build-apk.sh release >/dev/null)
   [[ "$(cat "$fixture/release.apk")" == "signed" ]]
-  [[ "$(cat "$fixture/tool.log")" == $'aapt2\napksigner' ]]
+  [[ "$(cat "$fixture/tool.log")" == \
+    $'aapt2:35.0.0:app/build/outputs/apk/release/app-release.apk\napksigner:35.0.0:app/build/outputs/apk/release/app-release.apk' ]]
 }
 
 test_debug_validates_before_copying() {
@@ -210,13 +222,15 @@ test_debug_validates_before_copying() {
   fixture="$(new_fixture valid-debug)"
   (cd "$fixture" && \
     ANDROID_HOME="$fixture/sdk" \
+    ANDROID_SDK_ROOT="$fixture/sdk" \
     FAKE_APK_MODE=debug \
     FAKE_AAPT2_EXIT=0 \
     FAKE_APKSIGNER_EXIT=0 \
     FAKE_TOOL_LOG="$fixture/tool.log" \
     ./build-apk.sh debug >/dev/null)
   [[ "$(cat "$fixture/debug.apk")" == "debug" ]]
-  [[ "$(cat "$fixture/tool.log")" == $'aapt2\napksigner' ]]
+  [[ "$(cat "$fixture/tool.log")" == \
+    $'aapt2:35.0.0:app/build/outputs/apk/debug/app-debug.apk\napksigner:35.0.0:app/build/outputs/apk/debug/app-debug.apk' ]]
 }
 
 test_release_rejects_unsigned_apk
@@ -245,18 +259,23 @@ if [[ -z "$SDK_ROOT" || ! -d "$SDK_ROOT/build-tools" ]]; then
 fi
 
 BUILD_TOOLS_VERSION="$(
-  find "$SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; |
+  for CANDIDATE_DIR in "$SDK_ROOT"/build-tools/*; do
+    [[ -d "$CANDIDATE_DIR" ]] || continue
+    CANDIDATE_VERSION="$(basename "$CANDIDATE_DIR")"
+    [[ "$CANDIDATE_VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] || continue
+    [[ -x "$CANDIDATE_DIR/aapt2" && -x "$CANDIDATE_DIR/apksigner" ]] || continue
+    printf '%s\n' "$CANDIDATE_VERSION"
+  done |
     sort -t. -k1,1n -k2,2n -k3,3n |
     tail -n 1
 )"
+if [[ -z "$BUILD_TOOLS_VERSION" ]]; then
+  echo "未找到同时包含 aapt2 和 apksigner 的稳定版 Android SDK Build Tools。"
+  exit 1
+fi
 BUILD_TOOLS_DIR="$SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION"
 AAPT2="$BUILD_TOOLS_DIR/aapt2"
 APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
-
-if [[ ! -x "$AAPT2" || ! -x "$APKSIGNER" ]]; then
-  echo "Android SDK Build Tools 缺少 aapt2 或 apksigner: $BUILD_TOOLS_DIR"
-  exit 1
-fi
 
 "$AAPT2" dump badging "$APK_PATH" >/dev/null
 "$APKSIGNER" verify "$APK_PATH"
@@ -268,7 +287,7 @@ fi
 
 Run: `tests/build-apk-test.sh`
 
-Expected: PASS；unsigned、包信息无效、签名无效均被拒绝，合法产物在两项校验之后复制。
+Expected: PASS；unsigned、包信息无效、签名无效、SDK 缺失和工具缺失均被拒绝；RC 版本与工具不完整的更高版本会被跳过；合法产物在两项校验之后复制。
 
 - [ ] **Step 6: 提交产物校验**
 
@@ -295,7 +314,11 @@ Run: `tests/build-apk-test.sh`
 
 Expected: PASS。
 
-Run: `./gradlew test`
+```bash
+SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
+ANDROID_HOME="$SDK_ROOT" ANDROID_SDK_ROOT="$SDK_ROOT" \
+  ./gradlew test -PpointApiBaseUrl=https://api.example.invalid/
+```
 
 Expected: BUILD SUCCESSFUL，现有 JVM 测试全部通过。
 
@@ -314,7 +337,13 @@ Expected: BUILD SUCCESSFUL，脚本校验成功并生成新的 `release.apk`。
 ```bash
 SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
 BUILD_TOOLS_VERSION="$(
-  find "$SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; |
+  for CANDIDATE_DIR in "$SDK_ROOT"/build-tools/*; do
+    [[ -d "$CANDIDATE_DIR" ]] || continue
+    CANDIDATE_VERSION="$(basename "$CANDIDATE_DIR")"
+    [[ "$CANDIDATE_VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] || continue
+    [[ -x "$CANDIDATE_DIR/aapt2" && -x "$CANDIDATE_DIR/apksigner" ]] || continue
+    printf '%s\n' "$CANDIDATE_VERSION"
+  done |
     sort -t. -k1,1n -k2,2n -k3,3n |
     tail -n 1
 )"

@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -317,6 +318,21 @@ class QuestionViewModelTest {
     }
 
     @Test
+    fun unansweredTailCanBeSkippedAndLoadsNextQuestion() = runBlocking {
+        val repository = FakePracticeRepository(
+            nextResults = loadResults(successQuestion("q1"), successQuestion("q2")),
+        )
+        val viewModel = firstViewModel(repository)
+
+        viewModel.initialize()?.join()
+        viewModel.goNext()?.join()
+
+        assertEquals("q2", viewModel.uiState.value.question?.id)
+        assertEquals(listOf(emptyList<String>(), listOf("q1")), repository.excludeCalls)
+        assertFalse(viewModel.uiState.value.submitted)
+    }
+
+    @Test
     fun changingLanguageResetsFirstQueueAndIgnoresStaleQuestionResponse() = runBlocking {
         val staleQuestion = CompletableDeferred<AppResult<Question>>()
         val store = FakeLearnerLanguageStore(LearnerLanguage.ALL)
@@ -464,6 +480,32 @@ class QuestionViewModelTest {
     }
 
     @Test
+    fun wrongRetryReusesOriginalOptionAndSubmissionKeyAfterFailure() = runBlocking {
+        val repository = FakePracticeRepository(
+            wrongAnswerResults = arrayDequeOf(
+                failure("SERVICE_UNAVAILABLE"),
+                AppResult.Success(sampleAnswer(correct = true, selectedOptionId = "o1")),
+            ),
+        )
+        val viewModel = QuestionViewModel(
+            repository = repository,
+            mode = PracticeMode.WRONG,
+            draftStore = PracticeDraftSource { wrongQuestion("q1") },
+            questionId = "q1",
+            scopeOverride = CoroutineScope(Job() + Dispatchers.Unconfined),
+        )
+
+        viewModel.initialize()?.join()
+        viewModel.selectOption("o1")
+        viewModel.submit()?.join()
+        viewModel.retrySubmit()?.join()
+
+        assertEquals(listOf("o1", "o1"), repository.wrongAnswerCalls.map { it.optionId })
+        assertNotNull(repository.wrongAnswerCalls.first().key)
+        assertEquals(1, repository.wrongAnswerCalls.map { it.key }.distinct().size)
+    }
+
+    @Test
     fun missingWrongQuestionDraftEmitsSingleReturnEventWithoutInventingQuestion() = runBlocking {
         val viewModel = QuestionViewModel(
             repository = FakePracticeRepository(),
@@ -535,6 +577,12 @@ class QuestionViewModelTest {
         val key: String?,
     )
 
+    private data class WrongAnswerCall(
+        val questionId: String,
+        val optionId: String,
+        val key: String?,
+    )
+
     private class FakePracticeRepository(
         val nextResults: ArrayDeque<LoadResult> = ArrayDeque(),
         val firstAnswerResults: ArrayDeque<AppResult<AnswerResult>> = ArrayDeque(),
@@ -545,6 +593,7 @@ class QuestionViewModelTest {
         val excludeCalls = mutableListOf<List<String>>()
         val nextQuestionCalls = mutableListOf<NextQuestionCall>()
         val firstAnswerCalls = mutableListOf<AnswerFirstCall>()
+        val wrongAnswerCalls = mutableListOf<WrongAnswerCall>()
 
         override suspend fun nextQuestion(
             excludeIds: List<String>,
@@ -571,8 +620,14 @@ class QuestionViewModelTest {
 
         override suspend fun summary(): AppResult<PracticeSummary> = error("unused")
         override suspend fun wrongQuestions(page: Int): AppResult<Page<WrongQuestion>> = error("unused")
-        override suspend fun answerWrong(questionId: String, selectedOptionId: String): AppResult<AnswerResult> =
-            wrongAnswerResults.removeFirst()
+        override suspend fun answerWrong(
+            questionId: String,
+            selectedOptionId: String,
+            idempotencyKey: String?,
+        ): AppResult<AnswerResult> {
+            wrongAnswerCalls += WrongAnswerCall(questionId, selectedOptionId, idempotencyKey)
+            return wrongAnswerResults.removeFirst()
+        }
     }
 
     private companion object {

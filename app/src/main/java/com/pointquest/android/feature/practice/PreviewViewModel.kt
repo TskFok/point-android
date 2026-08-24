@@ -2,6 +2,7 @@ package com.pointquest.android.feature.practice
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.UiErrorMapper
 import com.pointquest.android.data.practice.PracticeRepository
@@ -15,6 +16,7 @@ class PreviewViewModel(
     private val repository: PracticeRepository,
     private val learnerLanguageStore: LearnerLanguageStore,
     private val scopeOverride: CoroutineScope? = null,
+    private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
     private val mutableUiState = kotlinx.coroutines.flow.MutableStateFlow(PreviewUiState())
 
@@ -32,17 +34,19 @@ class PreviewViewModel(
         val count = mutableUiState.value.count ?: return null
         if (count !in PreviewUiState.MIN_PREVIEW_COUNT..PreviewUiState.MAX_PREVIEW_COUNT) return null
         if (loadJob?.isActive == true) return null
+        val language = learnerLanguageStore.language.value
         mutableUiState.value = mutableUiState.value.copy(
             loading = true,
             loadError = null,
             emptyPool = false,
+            language = language,
             items = emptyList(),
             currentIndex = 0,
             phase = PreviewPhase.SETUP,
             submitting = false,
         )
         return scope.launch {
-            when (val result = repository.previewQuestions(count, learnerLanguageStore.language.value)) {
+            when (val result = repository.previewQuestions(count, language)) {
                 is AppResult.Success -> {
                     val items = result.value.map { question ->
                         PreviewItem(question = question, submissionKey = UUID.randomUUID().toString())
@@ -56,12 +60,21 @@ class PreviewViewModel(
                     )
                 }
                 is AppResult.Failure -> {
-                    mutableUiState.value = mutableUiState.value.copy(
-                        loading = false,
-                        loadError = UiErrorMapper.map(result.error),
-                        emptyPool = false,
-                        phase = PreviewPhase.SETUP,
-                    )
+                    if (result.error.code == NO_UNANSWERED_QUESTIONS) {
+                        mutableUiState.value = mutableUiState.value.copy(
+                            loading = false,
+                            loadError = null,
+                            emptyPool = true,
+                            phase = PreviewPhase.SETUP,
+                        )
+                    } else {
+                        mutableUiState.value = mutableUiState.value.copy(
+                            loading = false,
+                            loadError = UiErrorMapper.map(result.error),
+                            emptyPool = false,
+                            phase = PreviewPhase.SETUP,
+                        )
+                    }
                 }
             }
         }.also { loadJob = it }
@@ -83,12 +96,16 @@ class PreviewViewModel(
             return null
         }
         val submissionOptionId = item.submissionOptionId ?: selectedOptionId
+        val appDataSession = appDataSync?.captureSession()
         updateCurrentItem(state.copy(submitting = true)) {
             it.copy(submissionOptionId = submissionOptionId, submitError = null)
         }
         return scope.launch {
             when (val result = repository.answerFirst(item.question.id, submissionOptionId, item.submissionKey)) {
                 is AppResult.Success -> {
+                    if (appDataSession != null) {
+                        appDataSync?.recordPracticeChanged(appDataSession, result.value.balance)
+                    }
                     val after = updateCurrentItem(mutableUiState.value.copy(submitting = false)) {
                         it.copy(result = result.value, submitError = null)
                     }
@@ -135,7 +152,10 @@ class PreviewViewModel(
 
     fun resetSession() {
         val count = mutableUiState.value.count
-        mutableUiState.value = PreviewUiState(count = count)
+        mutableUiState.value = PreviewUiState(
+            count = count,
+            language = learnerLanguageStore.language.value,
+        )
     }
 
     private fun updateCurrentItem(
@@ -162,5 +182,6 @@ class PreviewViewModel(
 
     private companion object {
         const val QUESTION_ALREADY_ANSWERED = "QUESTION_ALREADY_ANSWERED"
+        const val NO_UNANSWERED_QUESTIONS = "NO_UNANSWERED_QUESTIONS"
     }
 }

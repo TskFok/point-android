@@ -70,6 +70,19 @@ class PracticeRepositoryTest {
     }
 
     @Test
+    fun wrongAnswerReusesProvidedIdempotencyKeyAcrossRetry() = runBlocking {
+        val gateway = FakeStudentGateway().apply {
+            answerWrongResults += failure(null, "NETWORK_ERROR")
+            answerWrongResults += AppResult.Success(answer)
+        }
+
+        val result = repository(gateway).answerWrong("q1", "o2", idempotencyKey = "wrong-key")
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(listOf("wrong-key", "wrong-key"), gateway.wrongAnswerCalls.map { it.key })
+    }
+
+    @Test
     fun firstAnswerPassesThroughQuestionAlreadyAnswered() = runBlocking {
         val expected = failure(409, "QUESTION_ALREADY_ANSWERED")
         val gateway = FakeStudentGateway().apply { answerFirstResults += expected }

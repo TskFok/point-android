@@ -259,11 +259,16 @@ fun AppNavHost(
             if (container == null) {
                 PlaceholderScreen(navController, AppRoute.Preview, R.string.preview_title, R.string.practice_placeholder)
             } else {
-                val factory = remember(container.practiceRepository, container.learnerLanguageStore) {
+                val factory = remember(
+                    container.practiceRepository,
+                    container.learnerLanguageStore,
+                    container.appDataSync,
+                ) {
                     ViewModelFactory<PreviewViewModel> {
                         PreviewViewModel(
                             repository = container.practiceRepository,
                             learnerLanguageStore = container.learnerLanguageStore,
+                            appDataSync = container.appDataSync,
                         )
                     }
                 }
@@ -282,6 +287,8 @@ fun AppNavHost(
                     onReset = previewViewModel::resetSession,
                     onPractice = { navController.navigateTopLevel(AppRoute.Practice) },
                     onProfile = { navController.navigateTopLevel(AppRoute.Profile) },
+                    onWrongQuestions = { navController.navigate(AppRoute.WrongQuestions) },
+                    onHome = { navController.navigateTopLevel(AppRoute.Home) },
                 )
             }
         }
@@ -419,6 +426,7 @@ fun AppNavHost(
                     onRetryTailLoad = { questionViewModel.retryTailLoad() },
                     onWrongQuestions = { navController.navigate(AppRoute.WrongQuestions) },
                     onPreview = { navController.navigate(AppRoute.Preview) },
+                    onProfile = { navController.navigateTopLevel(AppRoute.Profile) },
                 )
             }
         }
@@ -473,6 +481,7 @@ fun AppNavHost(
                     onNoticeShown = wrongQuestionsViewModel::clearNotice,
                     onFirstPractice = { navController.navigate(AppRoute.Question(PracticeMode.FIRST, null)) },
                     onPreview = { navController.navigate(AppRoute.Preview) },
+                    onProfile = { navController.navigateTopLevel(AppRoute.Profile) },
                 )
             }
         }

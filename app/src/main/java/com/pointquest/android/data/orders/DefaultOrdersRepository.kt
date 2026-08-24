@@ -12,9 +12,9 @@ class DefaultOrdersRepository(
     private val authorized: AuthorizedCallExecutor,
     private val retry: RetryExecutor,
 ) : OrdersRepository {
-    override suspend fun redeem(productId: String): AppResult<Order> =
+    override suspend fun redeem(productId: String, idempotencyKey: String?): AppResult<Order> =
         authorized.executeOperation {
-            retry.executeIdempotent(RedeemPayload(productId)) { frozen ->
+            retry.executeIdempotent(RedeemPayload(productId), key = idempotencyKey) { frozen ->
                 execute { gateway.createOrder(frozen.payload.productId, frozen.key) }
             }
         }

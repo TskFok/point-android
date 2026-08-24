@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class ProductDetailViewModel(
     private val productId: String,
@@ -38,6 +39,7 @@ class ProductDetailViewModel(
     private var initialized = false
     private var productFailed = true
     private var balanceFailed = true
+    private var activeRedeemIdempotencyKey: String? = null
 
     val uiState: StateFlow<ProductDetailUiState> = mutableUiState
     val events: Flow<ProductDetailEvent> = eventChannel.receiveAsFlow()
@@ -60,6 +62,9 @@ class ProductDetailViewModel(
 
     fun requestRedeemConfirmation() {
         if (!mutableUiState.value.canRedeem) return
+        if (activeRedeemIdempotencyKey == null) {
+            activeRedeemIdempotencyKey = UUID.randomUUID().toString()
+        }
         mutableUiState.value = mutableUiState.value.copy(
             showRedeemConfirmation = true,
             message = null,
@@ -68,6 +73,7 @@ class ProductDetailViewModel(
 
     fun dismissRedeemConfirmation() {
         if (mutableUiState.value.redeeming) return
+        activeRedeemIdempotencyKey = null
         mutableUiState.value = mutableUiState.value.copy(showRedeemConfirmation = false)
     }
 
@@ -79,14 +85,18 @@ class ProductDetailViewModel(
         val state = mutableUiState.value
         if (!state.showRedeemConfirmation || !state.canRedeem || redeemJob?.isActive == true) return null
         val appDataSession = appDataSync?.captureSession()
+        val idempotencyKey = activeRedeemIdempotencyKey ?: UUID.randomUUID().toString().also {
+            activeRedeemIdempotencyKey = it
+        }
         mutableUiState.value = state.copy(
             showRedeemConfirmation = false,
             redeeming = true,
             message = null,
         )
         return scope.launch {
-            when (val result = ordersRepository.redeem(productId)) {
+            when (val result = ordersRepository.redeem(productId, idempotencyKey)) {
                 is AppResult.Success -> {
+                    activeRedeemIdempotencyKey = null
                     if (appDataSession != null) {
                         appDataSync?.recordOrderCreated(appDataSession, result.value.balance)
                     }
@@ -160,13 +170,14 @@ class ProductDetailViewModel(
                 product = mutableUiState.value.product?.copy(stock = 0),
                 redeeming = false,
                 message = UiText.Resource(R.string.product_out_of_stock),
-            )
+            ).also { activeRedeemIdempotencyKey = null }
             INSUFFICIENT_POINTS -> mutableUiState.value = mutableUiState.value.copy(
                 balance = safeBalance(error.details["balance"]),
                 redeeming = false,
                 message = UiText.Resource(R.string.product_insufficient_points),
-            )
+            ).also { activeRedeemIdempotencyKey = null }
             PRODUCT_INACTIVE -> {
+                activeRedeemIdempotencyKey = null
                 if (appDataSession != null) {
                     appDataSync?.recordProductInactive(appDataSession, productId)
                 }
@@ -177,11 +188,15 @@ class ProductDetailViewModel(
                 )
                 eventChannel.send(ProductDetailEvent.ReturnToShop)
             }
-            IDEMPOTENCY_CONFLICT -> mutableUiState.value = mutableUiState.value.copy(
-                redeeming = false,
-                message = UiText.Resource(R.string.product_redeem_conflict),
-            )
+            IDEMPOTENCY_CONFLICT -> {
+                activeRedeemIdempotencyKey = null
+                mutableUiState.value = mutableUiState.value.copy(
+                    redeeming = false,
+                    message = UiText.Resource(R.string.product_redeem_conflict),
+                )
+            }
             else -> mutableUiState.value = mutableUiState.value.copy(
+                showRedeemConfirmation = true,
                 redeeming = false,
                 message = UiErrorMapper.map(error),
             )

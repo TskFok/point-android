@@ -25,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.pointquest.android.R
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.ui.asString
 import com.pointquest.android.core.ui.components.AsyncContent
@@ -43,6 +44,7 @@ fun WrongQuestionsScreen(
     onNoticeShown: () -> Unit,
     onFirstPractice: () -> Unit = {},
     onPreview: () -> Unit = {},
+    onProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -67,8 +69,10 @@ fun WrongQuestionsScreen(
                 modifier = Modifier.fillMaxSize(),
                 emptyContent = {
                     WrongQuestionsEmptyState(
+                        showProfileAction = state.language != LearnerLanguage.ALL,
                         onFirstPractice = onFirstPractice,
                         onPreview = onPreview,
+                        onProfile = onProfile,
                         modifier = Modifier.fillMaxSize(),
                     )
                 },
@@ -112,8 +116,10 @@ fun WrongQuestionsScreen(
 
 @Composable
 private fun WrongQuestionsEmptyState(
+    showProfileAction: Boolean,
     onFirstPractice: () -> Unit,
     onPreview: () -> Unit,
+    onProfile: () -> Unit,
     modifier: Modifier,
 ) {
     Box(modifier.padding(16.dp), contentAlignment = Alignment.Center) {
@@ -135,6 +141,12 @@ private fun WrongQuestionsEmptyState(
                     onClick = onPreview,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 ) { Text(stringResource(R.string.home_preview_action)) }
+                if (showProfileAction) {
+                    TextButton(
+                        onClick = onProfile,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("wrong_empty_profile"),
+                    ) { Text(stringResource(R.string.wrong_questions_empty_profile_action)) }
+                }
             }
         }
     }

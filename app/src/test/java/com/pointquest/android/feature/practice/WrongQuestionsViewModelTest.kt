@@ -279,7 +279,11 @@ class WrongQuestionsViewModelTest {
         override suspend fun nextQuestion(excludeIds: List<String>): AppResult<Question> = error("unused")
         override suspend fun answerFirst(questionId: String, selectedOptionId: String): AppResult<AnswerResult> =
             error("unused")
-        override suspend fun answerWrong(questionId: String, selectedOptionId: String): AppResult<AnswerResult> =
+        override suspend fun answerWrong(
+            questionId: String,
+            selectedOptionId: String,
+            idempotencyKey: String?,
+        ): AppResult<AnswerResult> =
             error("unused")
     }
 

@@ -1,5 +1,6 @@
 package com.pointquest.android.feature.practice
 
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.ui.UiText
@@ -25,6 +26,7 @@ data class PreviewItem(
 
 data class PreviewUiState(
     val count: Int? = DEFAULT_PREVIEW_COUNT,
+    val language: LearnerLanguage = LearnerLanguage.ALL,
     val phase: PreviewPhase = PreviewPhase.SETUP,
     val items: List<PreviewItem> = emptyList(),
     val currentIndex: Int = 0,

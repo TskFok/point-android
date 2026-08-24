@@ -176,7 +176,11 @@ internal class FakeAppDependencies(
             AppResult.Success(answer)
         override suspend fun wrongQuestions(page: Int, language: LearnerLanguage) =
             AppResult.Success(Page<WrongQuestion>(emptyList(), PageMeta(page, 20, 0, 0)))
-        override suspend fun answerWrong(questionId: String, selectedOptionId: String) =
+        override suspend fun answerWrong(
+            questionId: String,
+            selectedOptionId: String,
+            idempotencyKey: String?,
+        ) =
             AppResult.Success(answer)
     }
 
@@ -193,7 +197,8 @@ internal class FakeAppDependencies(
     }
 
     override val ordersRepository: OrdersRepository = object : OrdersRepository {
-        override suspend fun redeem(productId: String) = AppResult.Success(order.copy(productId = productId))
+        override suspend fun redeem(productId: String, idempotencyKey: String?) =
+            AppResult.Success(order.copy(productId = productId))
         override suspend fun page(page: Int) =
             AppResult.Success(Page(listOf(order), PageMeta(page, 20, 1, 1)))
         override suspend fun detail(id: String) = AppResult.Success(order.copy(id = id))

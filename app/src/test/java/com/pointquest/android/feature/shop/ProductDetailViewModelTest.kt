@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -204,6 +205,26 @@ class ProductDetailViewModelTest {
     }
 
     @Test
+    fun failedRedeemKeepsConfirmationAndReusesOperationKeyOnRetry() = runTest {
+        val orders = FakeOrdersRepository().apply {
+            enqueue(failure("NETWORK_ERROR"))
+            enqueue(AppResult.Success(order("o1")))
+        }
+        val viewModel = loadedViewModel(orders)
+
+        viewModel.requestRedeemConfirmation()
+        viewModel.confirmRedeem()?.join()
+
+        assertTrue(viewModel.uiState.value.showRedeemConfirmation)
+        assertNotNull(orders.redeemKeys.single())
+        val firstKey = orders.redeemKeys.single()
+
+        viewModel.confirmRedeem()?.join()
+
+        assertEquals(listOf(firstKey, firstKey), orders.redeemKeys)
+    }
+
+    @Test
     fun redeemAndInactiveResultsSynchronizeExistingTopLevelPages() = runTest {
         val successSync = signedInSync()
         val successOrders = FakeOrdersRepository().apply { enqueue(AppResult.Success(order("o1"))) }
@@ -329,11 +350,13 @@ class ProductDetailViewModelTest {
     private class FakeOrdersRepository : OrdersRepository {
         private val responses = ArrayDeque<Any>()
         var redeemCalls = 0
+        val redeemKeys = mutableListOf<String?>()
         var beforeRedeem: (suspend () -> Unit)? = null
         fun enqueue(result: AppResult<Order>) { responses += result }
         fun enqueue(result: CompletableDeferred<AppResult<Order>>) { responses += result }
-        override suspend fun redeem(productId: String): AppResult<Order> {
+        override suspend fun redeem(productId: String, idempotencyKey: String?): AppResult<Order> {
             redeemCalls++
+            redeemKeys += idempotencyKey
             beforeRedeem?.invoke()
             return when (val response = responses.removeFirst()) {
                 is CompletableDeferred<*> -> @Suppress("UNCHECKED_CAST")

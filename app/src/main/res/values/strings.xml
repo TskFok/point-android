@@ -106,6 +106,7 @@
     <string name="answer_next">下一题</string>
     <string name="answer_back_to_wrong">返回错题本</string>
     <string name="answer_correct">回答正确</string>
+    <string name="answer_wrong_mastered">这道错题已掌握</string>
     <string name="answer_incorrect">你的答案不正确</string>
     <string name="answer_skipped">本题已跳过</string>
     <string name="answer_skipped_copy">这道题已在服务端记录为答过，本轮预习不会重复提交。</string>
@@ -114,6 +115,7 @@
     <string name="answer_points_awarded">本题获得积分：%1$d</string>
     <string name="answer_error_count">累计错误次数：%1$d</string>
     <string name="answer_balance">当前积分余额：%1$d</string>
+    <string name="answer_wrong_no_reward">错题重练不奖励积分</string>
     <string name="option_correct">正确答案</string>
     <string name="option_wrong">你的选择</string>
     <string name="option_correct_icon">正确选项图标</string>
@@ -125,10 +127,12 @@
     <string name="practice_completed_title">首次答题已完成</string>
     <string name="practice_completed_copy">当前没有未回答的题目，继续保持！</string>
     <string name="practice_completed_action">返回练习</string>
+    <string name="practice_completed_profile_action">调整学习语言</string>
     <string name="wrong_questions_title">错题本</string>
     <string name="wrong_questions_placeholder">错题本功能即将接入</string>
     <string name="wrong_questions_empty_title">错题本还是空的</string>
     <string name="wrong_questions_empty_copy">暂时没有需要重练的错题，可以开始首次答题或预习新题。</string>
+    <string name="wrong_questions_empty_profile_action">调整学习语言</string>
     <string name="wrong_question_error_count">累计答错 %1$d 次</string>
     <string name="wrong_question_retry_action">进入重练</string>
     <string name="practice_draft_expired">题目已失效，请重新选择</string>
@@ -140,7 +144,9 @@
     <string name="preview_count_helper">请输入 1–50 之间的数字</string>
     <string name="preview_count_preset">%1$d 题</string>
     <string name="preview_start">开始预习</string>
-    <string name="preview_empty_pool">当前没有可预习的题目，请稍后再试。</string>
+    <string name="preview_empty_pool">当前没有可预习的题目，可以去错题本继续巩固。</string>
+    <string name="preview_empty_pool_wrong_action">去错题本</string>
+    <string name="preview_empty_pool_profile_action">调整学习语言</string>
     <string name="preview_progress">第 %1$d / %2$d 题</string>
     <string name="preview_retry_submit">重试提交</string>
     <string name="preview_previous">上一题</string>
@@ -150,6 +156,7 @@
     <string name="preview_summary_skipped">跳过题数：%1$d</string>
     <string name="preview_summary_points">获得积分：%1$d</string>
     <string name="preview_reset">再来一轮</string>
+    <string name="preview_home_action">返回学习首页</string>
     <string name="product_detail_title">商品详情</string>
     <string name="product_detail_placeholder">商品详情功能即将接入</string>
     <string name="product_balance_load_failed">商品已加载，但积分余额获取失败，请重试</string>

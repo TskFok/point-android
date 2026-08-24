@@ -39,5 +39,9 @@ interface PracticeRepository {
     suspend fun wrongQuestions(page: Int, language: LearnerLanguage = LearnerLanguage.ALL): AppResult<Page<WrongQuestion>> =
         error("PracticeRepository.wrongQuestions(language) is not implemented.")
 
-    suspend fun answerWrong(questionId: String, selectedOptionId: String): AppResult<AnswerResult>
+    suspend fun answerWrong(
+        questionId: String,
+        selectedOptionId: String,
+        idempotencyKey: String? = null,
+    ): AppResult<AnswerResult>
 }

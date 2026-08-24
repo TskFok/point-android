@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.pointquest.android.app.PracticeMode
 import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.model.QuestionOption
 import com.pointquest.android.core.ui.UiText
@@ -96,6 +97,37 @@ class QuestionScreenTest {
         composeRule.onNodeWithTag("question_option_o1").assert(
             SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "已选择，回答错误"),
         )
+    }
+
+    @Test
+    fun wrongRetryCorrectResultUsesMasteredAndNoRewardCopy() {
+        composeRule.setContent {
+            PointQuestTheme {
+                QuestionScreen(
+                    state = QuestionUiState(
+                        mode = PracticeMode.WRONG,
+                        loading = false,
+                        queue = listOf(
+                            queueItem(
+                                question = question,
+                                selectedOptionId = "o2",
+                                submissionOptionId = "o2",
+                                result = result.copy(correct = true, pointsAwarded = 0, selectedOptionId = "o2"),
+                            ),
+                        ),
+                    ),
+                    onSelectOption = {},
+                    onSubmit = {},
+                    onPrevious = {},
+                    onNext = {},
+                    onRetry = {},
+                    onRetryTailLoad = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("这道错题已掌握").assertIsDisplayed()
+        composeRule.onNodeWithText("错题重练不奖励积分").assertIsDisplayed()
     }
 
     @Test
@@ -238,11 +270,13 @@ class QuestionScreenTest {
         var practiceOpened = false
         var wrongQuestionsOpened = false
         var previewOpened = false
+        var profileOpened = false
         composeRule.setContent {
             PointQuestTheme {
                 QuestionScreen(
                     state = QuestionUiState(
                         mode = PracticeMode.FIRST,
+                        language = LearnerLanguage.FR,
                         loading = false,
                         queue = listOf(
                             queueItem(
@@ -262,6 +296,7 @@ class QuestionScreenTest {
                     onRetryTailLoad = {},
                     onWrongQuestions = { wrongQuestionsOpened = true },
                     onPreview = { previewOpened = true },
+                    onProfile = { profileOpened = true },
                 )
             }
         }
@@ -269,9 +304,11 @@ class QuestionScreenTest {
         composeRule.onNodeWithText("返回练习").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("错题本").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("开始预习").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("调整学习语言").assertIsDisplayed().performClick()
         assertTrue(practiceOpened)
         assertTrue(wrongQuestionsOpened)
         assertTrue(previewOpened)
+        assertTrue(profileOpened)
     }
 
     private companion object {

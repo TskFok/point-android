@@ -54,7 +54,7 @@ class OrderDetailViewModelTest {
             detailCalls++
             return details.removeFirst()
         }
-        override suspend fun redeem(productId: String): AppResult<Order> {
+        override suspend fun redeem(productId: String, idempotencyKey: String?): AppResult<Order> {
             redeemCalls++
             return error("must not write")
         }

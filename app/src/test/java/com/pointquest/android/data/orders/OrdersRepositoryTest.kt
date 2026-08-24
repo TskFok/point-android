@@ -55,6 +55,19 @@ class OrdersRepositoryTest {
     }
 
     @Test
+    fun redeemReusesProvidedIdempotencyKeyAcrossRetry() = runBlocking {
+        val gateway = FakeStudentGateway().apply {
+            createOrderResults += failure(503, "SERVICE_UNAVAILABLE")
+            createOrderResults += AppResult.Success(pendingOrder)
+        }
+
+        val result = repository(gateway).redeem("p1", idempotencyKey = "redeem-key")
+
+        assertTrue(result is AppResult.Success)
+        assertEquals(listOf("redeem-key", "redeem-key"), gateway.createOrderCalls.map { it.key })
+    }
+
+    @Test
     fun redeemDoesNotRetryStableBusinessErrorsOrIdempotencyConflicts() = runBlocking {
         val errors = listOf(
             failure(409, "INSUFFICIENT_POINTS"),

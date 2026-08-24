@@ -2,6 +2,7 @@ package com.pointquest.android.feature.practice
 
 import com.pointquest.android.app.PracticeMode
 import com.pointquest.android.core.model.AnswerResult
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.ui.UiText
 
@@ -20,6 +21,7 @@ data class QuestionQueueItem(
 
 data class QuestionUiState(
     val mode: PracticeMode,
+    val language: LearnerLanguage = LearnerLanguage.ALL,
     val loading: Boolean = true,
     val queue: List<QuestionQueueItem> = emptyList(),
     val currentIndex: Int = 0,

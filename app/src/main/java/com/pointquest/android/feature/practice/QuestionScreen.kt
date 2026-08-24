@@ -38,6 +38,7 @@ fun QuestionScreen(
     onRetryTailLoad: () -> Unit,
     onWrongQuestions: () -> Unit = {},
     onPreview: () -> Unit = {},
+    onProfile: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.question_title), modifier = modifier) { padding ->
@@ -54,6 +55,8 @@ fun QuestionScreen(
                 onPractice = onNext,
                 onWrongQuestions = onWrongQuestions,
                 onPreview = onPreview,
+                onProfile = onProfile,
+                showProfileAction = state.language != com.pointquest.android.core.model.LearnerLanguage.ALL,
                 modifier = Modifier.padding(padding),
             )
             state.question != null -> {
@@ -114,7 +117,7 @@ fun QuestionScreen(
                     }
                 }
                 state.result?.let { result ->
-                    item { AnswerResultCard(result, Modifier.fillMaxWidth()) }
+                    item { AnswerResultCard(result, Modifier.fillMaxWidth(), mode = state.mode) }
                     if (state.mode == PracticeMode.WRONG) {
                         item {
                             PointPrimaryButton(
@@ -182,7 +185,7 @@ private fun QuestionProgress(
                 enabled = !state.submitting &&
                     !state.loadingNext &&
                     !state.completed &&
-                    (state.hasNextInQueue || (state.mode == PracticeMode.FIRST && state.submitted)),
+                    (state.hasNextInQueue || state.mode == PracticeMode.FIRST),
             )
         }
     }
@@ -211,6 +214,8 @@ private fun PracticeCompleted(
     onPractice: () -> Unit,
     onWrongQuestions: () -> Unit,
     onPreview: () -> Unit,
+    onProfile: () -> Unit,
+    showProfileAction: Boolean,
     modifier: Modifier,
 ) {
     Column(
@@ -228,6 +233,14 @@ private fun PracticeCompleted(
                 }
                 TextButton(onClick = onPreview, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
                     Text(stringResource(R.string.home_preview_action))
+                }
+                if (showProfileAction) {
+                    TextButton(
+                        onClick = onProfile,
+                        modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth().testTag("practice_completed_profile"),
+                    ) {
+                        Text(stringResource(R.string.practice_completed_profile_action))
+                    }
                 }
             }
         }

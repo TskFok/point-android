@@ -49,7 +49,8 @@ class DefaultPracticeRepository(
     override suspend fun answerWrong(
         questionId: String,
         selectedOptionId: String,
-    ): AppResult<AnswerResult> = write(AnswerPayload(questionId, selectedOptionId)) { payload, key ->
+        idempotencyKey: String?,
+    ): AppResult<AnswerResult> = write(AnswerPayload(questionId, selectedOptionId), idempotencyKey) { payload, key ->
         gateway.answerWrong(payload.questionId, payload.selectedOptionId, key)
     }
 

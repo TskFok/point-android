@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.pointquest.android.app.PracticeMode
 import com.pointquest.android.R
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.ui.components.PointCard
@@ -28,11 +29,13 @@ fun AnswerResultCard(
     result: AnswerResult?,
     modifier: Modifier = Modifier,
     skipped: Boolean = false,
+    mode: PracticeMode = PracticeMode.FIRST,
 ) {
     val effectiveSkipped = skipped || result == null
     val title = stringResource(
         when {
             effectiveSkipped -> R.string.answer_skipped
+            mode == PracticeMode.WRONG && result.correct -> R.string.answer_wrong_mastered
             result.correct -> R.string.answer_correct
             else -> R.string.answer_incorrect
         },
@@ -62,9 +65,17 @@ fun AnswerResultCard(
             } else {
                 requireNotNull(result)
                 Text(result.explanation, style = MaterialTheme.typography.bodyLarge)
-                Text(stringResource(R.string.answer_points_awarded, result.pointsAwarded))
-                Text(stringResource(R.string.answer_error_count, result.errorCount))
-                Text(stringResource(R.string.answer_balance, result.balance))
+                if (result.correct && mode == PracticeMode.FIRST) {
+                    Text(stringResource(R.string.answer_points_awarded, result.pointsAwarded))
+                }
+                if (!result.correct) {
+                    Text(stringResource(R.string.answer_error_count, result.errorCount))
+                }
+                if (mode == PracticeMode.WRONG) {
+                    Text(stringResource(R.string.answer_wrong_no_reward))
+                } else {
+                    Text(stringResource(R.string.answer_balance, result.balance))
+                }
             }
         }
     }

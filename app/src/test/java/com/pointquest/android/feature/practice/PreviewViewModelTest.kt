@@ -1,5 +1,8 @@
 package com.pointquest.android.feature.practice
 
+import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.core.auth.ActiveSession
+import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.Page
@@ -21,6 +24,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
 
 class PreviewViewModelTest {
     @Test
@@ -197,6 +201,64 @@ class PreviewViewModelTest {
         assertTrue(viewModel.uiState.value.items.isEmpty())
     }
 
+    @Test
+    fun noUnansweredQuestionsUsesPreviewEmptyStateInsteadOfGenericLoadError() = runTest {
+        val repository = PreviewTestRepository(
+            previewResult = AppResult.Failure(AppError(404, "NO_UNANSWERED_QUESTIONS", "empty", null)),
+        )
+        val viewModel = PreviewViewModel(
+            repository,
+            DefaultLearnerLanguageStore(MemoryLearnerLanguagePersistence()),
+            testScope(),
+        )
+
+        viewModel.startPreview()?.join()
+
+        assertTrue(viewModel.uiState.value.emptyPool)
+        assertNull(viewModel.uiState.value.loadError)
+        assertEquals(PreviewPhase.SETUP, viewModel.uiState.value.phase)
+    }
+
+    @Test
+    fun successfulPreviewAnswerPublishesBalanceThroughAppDataSync() = runTest {
+        val sessionState = SessionState().apply {
+            publish(
+                ActiveSession(
+                    user = com.pointquest.android.core.model.User(
+                        "student-1",
+                        "student",
+                        com.pointquest.android.core.model.UserRole.STUDENT,
+                        42,
+                    ),
+                    accessToken = "token",
+                    accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
+                    generation = 1,
+                    loginSessionId = 1,
+                ),
+            )
+        }
+        val appDataSync = AppDataSync(sessionState)
+        val repository = PreviewTestRepository(
+            previewResult = AppResult.Success(listOf(question("q1"))),
+            answerFirstResults = arrayDequeOf(
+                AppResult.Success(answer(correct = true, selectedOptionId = "o1", pointsAwarded = 5)),
+            ),
+        )
+        val viewModel = PreviewViewModel(
+            repository,
+            DefaultLearnerLanguageStore(MemoryLearnerLanguagePersistence()),
+            testScope(),
+            appDataSync,
+        )
+
+        viewModel.startPreview()?.join()
+        viewModel.selectOption("o1")
+        viewModel.submitCurrent()?.join()
+
+        assertEquals(105, appDataSync.state.value.balance)
+        assertEquals(1L, appDataSync.state.value.homeRefreshRevision)
+    }
+
     private data class PreviewCall(val count: Int, val language: LearnerLanguage)
 
     private data class AnswerFirstCall(val questionId: String, val optionId: String, val key: String?)
@@ -240,6 +302,7 @@ class PreviewViewModelTest {
         override suspend fun answerWrong(
             questionId: String,
             selectedOptionId: String,
+            idempotencyKey: String?,
         ): AppResult<AnswerResult> = error("unused")
     }
 

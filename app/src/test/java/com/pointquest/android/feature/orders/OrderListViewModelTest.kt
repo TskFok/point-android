@@ -75,7 +75,7 @@ class OrderListViewModelTest {
             }
         }
         override suspend fun detail(id: String): AppResult<Order> = error("unused")
-        override suspend fun redeem(productId: String): AppResult<Order> = error("unused")
+        override suspend fun redeem(productId: String, idempotencyKey: String?): AppResult<Order> = error("unused")
     }
 
     private companion object {

@@ -83,6 +83,7 @@ class QuestionViewModel(
         submitJob?.cancel()
         val generation = loadGeneration.incrementAndGet()
         mutableUiState.value = mutableUiState.value.copy(
+            language = language,
             loading = true,
             queue = emptyList(),
             currentIndex = 0,
@@ -169,7 +170,7 @@ class QuestionViewModel(
         return scope.launch {
             val result = when (mode) {
                 PracticeMode.FIRST -> repository.answerFirst(question.id, selectedOptionId, item.submissionKey)
-                PracticeMode.WRONG -> repository.answerWrong(question.id, selectedOptionId)
+                PracticeMode.WRONG -> repository.answerWrong(question.id, selectedOptionId, item.submissionKey)
             }
             if (!isCurrentSubmission(submissionGeneration, index, question.id)) return@launch
             when (result) {
@@ -204,7 +205,7 @@ class QuestionViewModel(
             mutableUiState.value = state.copy(currentIndex = state.currentIndex + 1, tailError = null)
             return null
         }
-        if (mode != PracticeMode.FIRST || !state.submitted) return null
+        if (mode != PracticeMode.FIRST) return null
         return loadTailQuestion(activeLanguage)
     }
 

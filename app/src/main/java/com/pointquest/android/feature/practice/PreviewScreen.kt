@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.pointquest.android.R
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.ui.asString
 import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointPrimaryButton
@@ -45,6 +46,8 @@ fun PreviewScreen(
     onReset: () -> Unit,
     onPractice: () -> Unit = {},
     onProfile: () -> Unit = {},
+    onWrongQuestions: () -> Unit = {},
+    onHome: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.preview_title), modifier = modifier) { padding ->
@@ -55,6 +58,8 @@ fun PreviewScreen(
                 onCountChange = onCountChange,
                 onStart = onStart,
                 onRetryLoad = onRetryLoad,
+                onWrongQuestions = onWrongQuestions,
+                onProfile = onProfile,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             state.phase == PreviewPhase.QUIZ -> PreviewQuiz(
@@ -71,6 +76,7 @@ fun PreviewScreen(
                 onReset = onReset,
                 onPractice = onPractice,
                 onProfile = onProfile,
+                onHome = onHome,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
         }
@@ -96,6 +102,8 @@ private fun PreviewSetup(
     onCountChange: (Int?) -> Unit,
     onStart: () -> Unit,
     onRetryLoad: () -> Unit,
+    onWrongQuestions: () -> Unit,
+    onProfile: () -> Unit,
     modifier: Modifier,
 ) {
     LazyColumn(
@@ -155,10 +163,23 @@ private fun PreviewSetup(
         if (state.emptyPool) {
             item {
                 PointCard(Modifier.fillMaxWidth()) {
-                    Text(
-                        text = stringResource(R.string.preview_empty_pool),
-                        modifier = Modifier.padding(20.dp),
-                    )
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(stringResource(R.string.preview_empty_pool))
+                        TextButton(
+                            onClick = onWrongQuestions,
+                            modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth().testTag("preview_empty_wrong_questions"),
+                        ) {
+                            Text(stringResource(R.string.preview_empty_pool_wrong_action))
+                        }
+                        if (state.language != LearnerLanguage.ALL) {
+                            TextButton(
+                                onClick = onProfile,
+                                modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth().testTag("preview_empty_profile"),
+                            ) {
+                                Text(stringResource(R.string.preview_empty_pool_profile_action))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -258,6 +279,7 @@ private fun PreviewSummary(
     onReset: () -> Unit,
     onPractice: () -> Unit,
     onProfile: () -> Unit,
+    onHome: () -> Unit,
     modifier: Modifier,
 ) {
     Column(
@@ -280,6 +302,9 @@ private fun PreviewSummary(
                 }
                 TextButton(onClick = onProfile, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
                     Text(stringResource(R.string.profile_title))
+                }
+                TextButton(onClick = onHome, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
+                    Text(stringResource(R.string.preview_home_action))
                 }
             }
         }

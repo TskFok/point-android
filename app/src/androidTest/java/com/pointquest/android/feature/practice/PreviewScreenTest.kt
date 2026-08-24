@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.model.QuestionOption
@@ -24,6 +25,7 @@ class PreviewScreenTest {
         var resetOpened = false
         var practiceOpened = false
         var profileOpened = false
+        var homeOpened = false
         composeRule.setContent {
             PointQuestTheme {
                 PreviewScreen(
@@ -50,6 +52,7 @@ class PreviewScreenTest {
                     onReset = { resetOpened = true },
                     onPractice = { practiceOpened = true },
                     onProfile = { profileOpened = true },
+                    onHome = { homeOpened = true },
                 )
             }
         }
@@ -57,8 +60,42 @@ class PreviewScreenTest {
         composeRule.onNodeWithText("再来一轮").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("返回练习").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("我的").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("返回学习首页").assertIsDisplayed().performClick()
         assertTrue(resetOpened)
         assertTrue(practiceOpened)
+        assertTrue(profileOpened)
+        assertTrue(homeOpened)
+    }
+
+    @Test
+    fun selectedLanguageEmptyPoolOffersWrongQuestionsAndProfileActions() {
+        var wrongQuestionsOpened = false
+        var profileOpened = false
+        composeRule.setContent {
+            PointQuestTheme {
+                PreviewScreen(
+                    state = PreviewUiState(
+                        language = LearnerLanguage.FR,
+                        emptyPool = true,
+                    ),
+                    onCountChange = {},
+                    onStart = {},
+                    onSelectOption = {},
+                    onSubmit = {},
+                    onPrevious = {},
+                    onNext = {},
+                    onRetryLoad = {},
+                    onRetrySubmit = {},
+                    onReset = {},
+                    onWrongQuestions = { wrongQuestionsOpened = true },
+                    onProfile = { profileOpened = true },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("去错题本").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("调整学习语言").assertIsDisplayed().performClick()
+        assertTrue(wrongQuestionsOpened)
         assertTrue(profileOpened)
     }
 

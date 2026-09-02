@@ -13,6 +13,8 @@ data class ProductListUiState(
     val error: UiText? = null,
     val refreshError: UiText? = null,
     val loadMoreError: UiText? = null,
+    val balance: Int? = null,
+    val balanceFailed: Boolean = false,
 ) {
     val items: List<Product>
         get() = paged.items
@@ -22,4 +24,10 @@ data class ProductListUiState(
 
     val empty: Boolean
         get() = !loading && error == null && items.isEmpty()
+
+    fun pointsDeficit(product: Product): Int? {
+        val current = balance ?: return null
+        if (!product.isActive || product.stock <= 0) return null
+        return (product.pointsCost - current).takeIf { it > 0 }
+    }
 }

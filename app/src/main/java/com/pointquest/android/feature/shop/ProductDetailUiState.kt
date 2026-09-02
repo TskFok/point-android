@@ -11,11 +11,26 @@ data class ProductDetailUiState(
     val message: UiText? = null,
     val showRedeemConfirmation: Boolean = false,
     val redeeming: Boolean = false,
+    val redeemRetryPending: Boolean = false,
 ) {
     val canRedeem: Boolean
         get() = product?.let { item ->
             item.isActive && item.stock > 0 && balance != null && balance >= item.pointsCost && !redeeming
         } == true
+
+    val pointsDeficit: Int?
+        get() {
+            val item = product ?: return null
+            val current = balance ?: return null
+            return (item.pointsCost - current).takeIf { it > 0 }
+        }
+
+    val remainingBalanceAfterRedeem: Int?
+        get() {
+            val item = product ?: return null
+            val current = balance ?: return null
+            return (current - item.pointsCost).coerceAtLeast(0)
+        }
 }
 
 sealed interface ProductDetailEvent {

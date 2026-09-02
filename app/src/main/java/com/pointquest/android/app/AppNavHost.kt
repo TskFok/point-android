@@ -296,11 +296,12 @@ fun AppNavHost(
             if (container == null) {
                 PlaceholderScreen(navController, AppRoute.Shop, R.string.shop_title, R.string.shop_placeholder)
             } else {
-                val factory = remember(container.productsRepository) {
+                val factory = remember(container.productsRepository, container.pointsRepository, container.appDataSync) {
                     ViewModelFactory<ProductListViewModel> {
                         ProductListViewModel(
                             container.productsRepository,
                             appDataSync = container.appDataSync,
+                            pointsRepository = container.pointsRepository,
                         )
                     }
                 }

@@ -58,7 +58,37 @@ class ProductDetailScreenTest {
             .assertIsEnabled()
             .performClick()
         composeRule.onNodeWithText("确认兑换").assertIsDisplayed()
+        composeRule.onNodeWithText("现有积分：20").assertIsDisplayed()
+        composeRule.onNodeWithText("本次兑换：10 积分").assertIsDisplayed()
+        composeRule.onNodeWithText("兑换后余额：10 积分").assertIsDisplayed()
         composeRule.onNodeWithTag("product_redeem_confirm").assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun insufficientPointsShowsDeficitAndRetryLabel() {
+        composeRule.setContent {
+            PointQuestTheme {
+                ProductDetailScreen(
+                    state = ProductDetailUiState(
+                        product = product,
+                        balance = 2,
+                        loading = false,
+                        showRedeemConfirmation = true,
+                        redeemRetryPending = true,
+                    ),
+                    imageUrlFactory = ProductImageUrlFactory("https://images.example.test/"),
+                    onRetry = {},
+                    onBack = {},
+                    onRequestRedeem = {},
+                    onDismissRedeem = {},
+                    onConfirmRedeem = {},
+                    onMessageShown = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("还差 8 积分").assertIsDisplayed()
+        composeRule.onNodeWithText("重试兑换").assertIsDisplayed()
     }
 
     @Test

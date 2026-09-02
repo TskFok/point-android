@@ -11,6 +11,7 @@ import com.pointquest.android.core.network.PageAdjustment
 import com.pointquest.android.core.network.PagedState
 import com.pointquest.android.core.ui.UiErrorMapper
 import com.pointquest.android.core.ui.UiText
+import com.pointquest.android.data.points.PointsRepository
 import com.pointquest.android.data.products.ProductsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -29,6 +30,7 @@ class ProductListViewModel(
     private val repository: ProductsRepository,
     private val scopeOverride: CoroutineScope? = null,
     private val appDataSync: AppDataSync? = null,
+    private val pointsRepository: PointsRepository? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(ProductListUiState())
     private val searchInput = MutableStateFlow("")
@@ -47,6 +49,8 @@ class ProductListViewModel(
     var loadMoreJob: Job? = null
         private set
     var refreshJob: Job? = null
+        private set
+    var balanceJob: Job? = null
         private set
 
     fun initialize(): Job? = synchronized(initializationLock) {
@@ -69,6 +73,7 @@ class ProductListViewModel(
             scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 sync.state.collect { syncState ->
                     removeInactiveProducts(syncState.inactiveProductIds)
+                    applySyncBalance(syncState.balance.takeIf { syncState.session != null })
                     val sessionChanged = syncState.session != observedSyncSession
                     val revisionAdvanced = !sessionChanged &&
                         syncState.shopRefreshRevision > observedShopRevision
@@ -81,7 +86,12 @@ class ProductListViewModel(
                 }
             }
         }
-        startFirstPage(normalizeSearch(searchInput.value))
+        val productsJob = startFirstPage(normalizeSearch(searchInput.value))
+        val loadedBalance = loadBalance()
+        return@synchronized scope.launch {
+            productsJob.join()
+            loadedBalance?.join()
+        }
     }
 
     fun updateSearch(value: String) {
@@ -91,13 +101,17 @@ class ProductListViewModel(
 
     fun retry(): Job? {
         if (loadingJob?.isActive == true) return null
-        return startFirstPage(activeQuery)
+        val productsJob = startFirstPage(activeQuery)
+        loadBalance()
+        return productsJob
     }
 
     fun refresh(): Job? {
         val state = mutableUiState.value
         if (state.loading || state.refreshing) return null
-        return startRefresh()
+        val productsJob = startRefresh()
+        loadBalance()
+        return productsJob
     }
 
     private fun startRefresh(): Job {
@@ -278,8 +292,10 @@ class ProductListViewModel(
             mutableUiState.value = ProductListUiState(search = mutableUiState.value.search)
         } else if (mutableUiState.value.items.isEmpty()) {
             startFirstPage(activeQuery)
+            loadBalance()
         } else {
             startRefresh()
+            loadBalance()
         }
     }
 
@@ -289,6 +305,32 @@ class ProductListViewModel(
         } else {
             startRefresh()
         }
+    }
+
+    private fun applySyncBalance(balance: Int?) {
+        if (balance == null) return
+        mutableUiState.value = mutableUiState.value.copy(balance = balance, balanceFailed = false)
+    }
+
+    private fun loadBalance(): Job? {
+        val pointsRepository = pointsRepository ?: return null
+        balanceJob?.cancel()
+        return scope.launch {
+            when (val result = pointsRepository.balance()) {
+                is AppResult.Success -> {
+                    val synced = appDataSync?.state?.value?.balance?.takeIf {
+                        appDataSync.state.value.session != null
+                    }
+                    mutableUiState.value = mutableUiState.value.copy(
+                        balance = (synced ?: result.value).coerceAtLeast(0),
+                        balanceFailed = false,
+                    )
+                }
+                is AppResult.Failure -> mutableUiState.value = mutableUiState.value.copy(
+                    balanceFailed = mutableUiState.value.balance == null,
+                )
+            }
+        }.also { balanceJob = it }
     }
 
     private fun normalizeSearch(value: String): String? = value.trim().takeUnless(String::isEmpty)

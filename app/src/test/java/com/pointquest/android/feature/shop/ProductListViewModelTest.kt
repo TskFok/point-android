@@ -9,7 +9,9 @@ import com.pointquest.android.core.model.Product
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppError
+import com.pointquest.android.core.model.PointLedgerEntry
 import com.pointquest.android.core.network.AppResult
+import com.pointquest.android.data.points.PointsRepository
 import com.pointquest.android.data.products.ProductsRepository
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
@@ -28,6 +30,72 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProductListViewModelTest {
+    @Test
+    fun initializeLoadsBalanceAndExposesDeficitForUnaffordableProducts() = runTest {
+        val products = FakeProductsRepository().apply {
+            enqueuePage(success(page(1, 1, product("cheap", pointsCost = 5), product("pricey", pointsCost = 20))))
+        }
+        val points = FakePointsRepository(balanceResult = AppResult.Success(10))
+        val viewModel = ProductListViewModel(
+            products,
+            backgroundScope,
+            pointsRepository = points,
+        )
+        viewModel.initialize()?.join()
+
+        val state = viewModel.uiState.value
+        assertEquals(10, state.balance)
+        assertFalse(state.balanceFailed)
+        assertNull(state.error)
+        assertEquals(null, state.pointsDeficit(state.items[0]))
+        assertEquals(10, state.pointsDeficit(state.items[1]))
+        assertEquals(1, points.balanceCalls)
+    }
+
+    @Test
+    fun balanceFailureDoesNotSetListErrorAndLeavesBalanceUnknown() = runTest {
+        val products = FakeProductsRepository().apply {
+            enqueuePage(success(page(1, 1, product("p1"))))
+        }
+        val points = FakePointsRepository(balanceResult = failure("NETWORK_ERROR"))
+        val viewModel = ProductListViewModel(
+            products,
+            backgroundScope,
+            pointsRepository = points,
+        )
+        viewModel.initialize()?.join()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("p1"), state.items.map(Product::id))
+        assertNull(state.balance)
+        assertTrue(state.balanceFailed)
+        assertNull(state.error)
+        assertNull(state.pointsDeficit(state.items.single()))
+    }
+
+    @Test
+    fun appDataSyncBalanceOverridesLoadedBalance() = runTest {
+        val products = FakeProductsRepository().apply {
+            enqueuePage(success(page(1, 1, product("p1", pointsCost = 10))))
+        }
+        val points = FakePointsRepository(balanceResult = AppResult.Success(20))
+        val sync = signedInSync()
+        val viewModel = ProductListViewModel(
+            products,
+            backgroundScope,
+            appDataSync = sync,
+            pointsRepository = points,
+        )
+        viewModel.initialize()?.join()
+        assertEquals(20, viewModel.uiState.value.balance)
+
+        sync.recordPracticeChanged(checkNotNull(sync.captureSession()), balance = 4)
+        runCurrent()
+
+        assertEquals(4, viewModel.uiState.value.balance)
+        assertEquals(6, viewModel.uiState.value.pointsDeficit(viewModel.uiState.value.items.single()))
+    }
+
     @Test
     fun searchDebouncesFor300msIgnoresDuplicatesAndResetsToFirstPage() = runTest {
         val repository = FakeProductsRepository().apply {
@@ -318,6 +386,17 @@ class ProductListViewModelTest {
         override suspend fun detail(id: String): AppResult<Product> = error("unused")
     }
 
+    private class FakePointsRepository(
+        var balanceResult: AppResult<Int> = AppResult.Success(0),
+    ) : PointsRepository {
+        var balanceCalls = 0
+        override suspend fun balance(): AppResult<Int> {
+            balanceCalls++
+            return balanceResult
+        }
+        override suspend fun ledger(page: Int): AppResult<Page<PointLedgerEntry>> = error("unused")
+    }
+
     private companion object {
         fun success(page: Page<Product>) = AppResult.Success(page)
         fun failure(code: String) = AppResult.Failure(AppError(null, code, "failed", null))
@@ -344,12 +423,12 @@ class ProductListViewModelTest {
             PageMeta(pageNumber, pageSize = 2, total = totalPages * 2, totalPages = totalPages),
         )
 
-        fun product(id: String) = Product(
+        fun product(id: String, pointsCost: Int = 10) = Product(
             id = id,
             name = "商品 $id",
             description = "描述",
             imageKey = "products/550e8400-e29b-41d4-a716-446655440000.png",
-            pointsCost = 10,
+            pointsCost = pointsCost,
             stock = 2,
             isActive = true,
             createdAt = Instant.parse("2030-01-01T00:00:00Z"),

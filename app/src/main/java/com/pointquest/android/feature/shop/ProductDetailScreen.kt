@@ -97,6 +97,13 @@ fun ProductDetailScreen(
                             }
                         }
                     }
+                    state.pointsDeficit?.let { deficit ->
+                        Text(
+                            stringResource(R.string.product_deficit, deficit),
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.testTag("product_deficit"),
+                        )
+                    }
                     PointPrimaryButton(
                         text = if (state.redeeming) stringResource(R.string.product_redeeming)
                         else stringResource(R.string.product_redeem),
@@ -115,19 +122,36 @@ fun ProductDetailScreen(
             onDismissRequest = onDismissRedeem,
             title = { Text(stringResource(R.string.product_redeem_confirm_title)) },
             text = {
-                Text(
-                    stringResource(
-                        R.string.product_redeem_confirm_message,
-                        state.product?.name.orEmpty(),
-                        state.product?.pointsCost ?: 0,
-                    ),
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(
+                            R.string.product_redeem_confirm_message,
+                            state.product?.name.orEmpty(),
+                            state.product?.pointsCost ?: 0,
+                        ),
+                    )
+                    Text(stringResource(R.string.product_redeem_current, state.balance ?: 0))
+                    Text(stringResource(R.string.product_redeem_cost, state.product?.pointsCost ?: 0))
+                    Text(
+                        stringResource(
+                            R.string.product_redeem_remaining,
+                            state.remainingBalanceAfterRedeem ?: 0,
+                        ),
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
                     onClick = onConfirmRedeem,
                     modifier = Modifier.heightIn(min = 48.dp).testTag("product_redeem_confirm"),
-                ) { Text(stringResource(R.string.product_redeem_confirm_action)) }
+                ) {
+                    Text(
+                        stringResource(
+                            if (state.redeemRetryPending) R.string.product_redeem_retry
+                            else R.string.product_redeem_confirm_action,
+                        ),
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = onDismissRedeem, modifier = Modifier.heightIn(min = 48.dp)) {

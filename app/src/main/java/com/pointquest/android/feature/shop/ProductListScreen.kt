@@ -85,6 +85,15 @@ fun ProductListScreen(
                     placeholder = { Text(stringResource(R.string.product_search_hint)) },
                     singleLine = true,
                 )
+                Text(
+                    text = state.balance?.let { stringResource(R.string.product_balance, it) }
+                        ?: stringResource(R.string.product_balance_unknown),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .testTag("shop_balance"),
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 val asyncState = when {
                     state.loading && state.items.isEmpty() -> AsyncState.Loading
                     state.error != null && state.items.isEmpty() -> AsyncState.Error(state.error)
@@ -100,6 +109,18 @@ fun ProductListScreen(
                         state = asyncState,
                         onRetry = onRetry,
                         modifier = Modifier.fillMaxSize(),
+                        emptyContent = {
+                            if (state.search.isBlank()) {
+                                ShopEmptyState(Modifier.fillMaxSize())
+                            } else {
+                                PointCard(Modifier.fillMaxSize().padding(16.dp)) {
+                                    Text(
+                                        stringResource(R.string.empty_state),
+                                        modifier = Modifier.padding(20.dp),
+                                    )
+                                }
+                            }
+                        },
                     ) { products ->
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -107,7 +128,11 @@ fun ProductListScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             items(products, key = Product::id) { product ->
-                                ProductRow(product, imageUrlFactory) { onProductClick(product) }
+                                ProductRow(
+                                    product = product,
+                                    imageUrlFactory = imageUrlFactory,
+                                    deficit = state.pointsDeficit(product),
+                                ) { onProductClick(product) }
                             }
                             item {
                                 when {
@@ -135,9 +160,28 @@ fun ProductListScreen(
 }
 
 @Composable
+private fun ShopEmptyState(modifier: Modifier) {
+    Box(modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+        PointCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    stringResource(R.string.shop_empty_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    stringResource(R.string.shop_empty_copy),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ProductRow(
     product: Product,
     imageUrlFactory: ProductImageUrlFactory,
+    deficit: Int?,
     onClick: () -> Unit,
 ) {
     PointCard(
@@ -150,12 +194,22 @@ private fun ProductRow(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ProductImage(product, imageUrlFactory, Modifier.size(88.dp).align(Alignment.CenterHorizontally))
             Text(product.name, style = MaterialTheme.typography.titleMedium)
+            Text(product.description, style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(R.string.product_points_cost, product.pointsCost))
             Text(
-                if (!product.isActive) stringResource(R.string.product_status_inactive)
-                else if (product.stock <= 0) stringResource(R.string.product_status_out_of_stock)
-                else stringResource(R.string.product_stock, product.stock),
+                when {
+                    !product.isActive -> stringResource(R.string.product_status_inactive)
+                    product.stock <= 0 -> stringResource(R.string.product_sold_out)
+                    else -> stringResource(R.string.product_stock_count, product.stock)
+                },
             )
+            if (deficit != null) {
+                Text(
+                    stringResource(R.string.product_deficit, deficit),
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("product_deficit_${product.id}"),
+                )
+            }
         }
     }
 }

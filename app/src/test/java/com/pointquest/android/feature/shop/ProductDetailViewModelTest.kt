@@ -101,6 +101,7 @@ class ProductDetailViewModelTest {
         valid.requestRedeemConfirmation()
         valid.confirmRedeem()?.join()
         assertEquals(7, valid.uiState.value.balance)
+        assertEquals(3, valid.uiState.value.pointsDeficit)
         assertFalse(valid.uiState.value.canRedeem)
 
         val invalidOrders = FakeOrdersRepository().apply {
@@ -216,12 +217,28 @@ class ProductDetailViewModelTest {
         viewModel.confirmRedeem()?.join()
 
         assertTrue(viewModel.uiState.value.showRedeemConfirmation)
+        assertTrue(viewModel.uiState.value.redeemRetryPending)
         assertNotNull(orders.redeemKeys.single())
         val firstKey = orders.redeemKeys.single()
 
         viewModel.confirmRedeem()?.join()
 
         assertEquals(listOf(firstKey, firstKey), orders.redeemKeys)
+        assertFalse(viewModel.uiState.value.redeemRetryPending)
+    }
+
+    @Test
+    fun dismissAfterRetryableFailureClearsRetryPending() = runTest {
+        val orders = FakeOrdersRepository().apply { enqueue(failure("NETWORK_ERROR")) }
+        val viewModel = loadedViewModel(orders)
+        viewModel.requestRedeemConfirmation()
+        viewModel.confirmRedeem()?.join()
+        assertTrue(viewModel.uiState.value.redeemRetryPending)
+
+        viewModel.dismissRedeemConfirmation()
+
+        assertFalse(viewModel.uiState.value.showRedeemConfirmation)
+        assertFalse(viewModel.uiState.value.redeemRetryPending)
     }
 
     @Test

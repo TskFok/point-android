@@ -68,13 +68,17 @@ class ProductDetailViewModel(
         mutableUiState.value = mutableUiState.value.copy(
             showRedeemConfirmation = true,
             message = null,
+            redeemRetryPending = false,
         )
     }
 
     fun dismissRedeemConfirmation() {
         if (mutableUiState.value.redeeming) return
         activeRedeemIdempotencyKey = null
-        mutableUiState.value = mutableUiState.value.copy(showRedeemConfirmation = false)
+        mutableUiState.value = mutableUiState.value.copy(
+            showRedeemConfirmation = false,
+            redeemRetryPending = false,
+        )
     }
 
     fun clearMessage() {
@@ -91,6 +95,7 @@ class ProductDetailViewModel(
         mutableUiState.value = state.copy(
             showRedeemConfirmation = false,
             redeeming = true,
+            redeemRetryPending = false,
             message = null,
         )
         return scope.launch {
@@ -198,6 +203,7 @@ class ProductDetailViewModel(
             else -> mutableUiState.value = mutableUiState.value.copy(
                 showRedeemConfirmation = true,
                 redeeming = false,
+                redeemRetryPending = true,
                 message = UiErrorMapper.map(error),
             )
         }

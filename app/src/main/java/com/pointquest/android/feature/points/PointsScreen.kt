@@ -90,7 +90,7 @@ fun PointsScreen(
 }
 
 @Composable
-private fun PointLedgerRow(entry: PointLedgerEntry) {
+internal fun PointLedgerRow(entry: PointLedgerEntry) {
     PointCard(Modifier.fillMaxWidth().heightIn(min = 88.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(pointTypeText(entry.type), style = MaterialTheme.typography.titleMedium)

@@ -93,6 +93,9 @@ class PreviewScreenTest {
             }
         }
 
+        composeRule.onNodeWithText("当前法语没有可预习的新题").assertIsDisplayed()
+        composeRule.onNodeWithText("当前语言偏好下已没有可预习的法语题目。可调整学习语言偏好，或去复习错题。")
+            .assertIsDisplayed()
         composeRule.onNodeWithText("去错题本").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("调整学习语言").assertIsDisplayed().performClick()
         assertTrue(wrongQuestionsOpened)

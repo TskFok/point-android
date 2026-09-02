@@ -7,7 +7,10 @@ import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
+import com.pointquest.android.core.network.AuthorizedCallExecutor
+import com.pointquest.android.core.network.RetryExecutor
 import com.pointquest.android.data.gateway.PublicAuthGateway
+import com.pointquest.android.data.gateway.StudentGateway
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -18,6 +21,9 @@ interface AuthRepository {
 
     suspend fun restore(): AppResult<User>
 
+    suspend fun currentUser(): AppResult<User> =
+        error("AuthRepository.currentUser is not implemented.")
+
     suspend fun logout()
 }
 
@@ -26,6 +32,9 @@ class DefaultAuthRepository(
     private val sessionManager: SessionManager,
     private val sessionState: SessionState,
     private val refreshCoordinator: RefreshCoordinator,
+    private val studentGateway: StudentGateway? = null,
+    private val authorized: AuthorizedCallExecutor? = null,
+    private val retry: RetryExecutor? = null,
 ) : AuthRepository {
     override suspend fun register(username: String, password: String): AppResult<User> =
         gateway.register(username, password)
@@ -59,6 +68,22 @@ class DefaultAuthRepository(
                 }
             }
         }
+    }
+
+    override suspend fun currentUser(): AppResult<User> {
+        val studentGateway = studentGateway
+        val authorized = authorized
+        val retry = retry
+        if (studentGateway == null || authorized == null || retry == null) {
+            error("AuthRepository.currentUser is not implemented.")
+        }
+        val result = authorized.executeOperation {
+            retry.executeRead { execute { studentGateway.currentUser() } }
+        }
+        if (result is AppResult.Success && result.value.role == UserRole.STUDENT) {
+            sessionManager.replaceUser(result.value)
+        }
+        return result
     }
 
     override suspend fun logout() {

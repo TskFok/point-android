@@ -334,11 +334,13 @@ fun AppNavHost(
                             container.sessionState,
                             container.learnerLanguageStore,
                             appDataSync = container.appDataSync,
+                            pointsRepository = container.pointsRepository,
                         )
                     }
                 }
                 val profileViewModel: ProfileViewModel = viewModel(factory = factory)
                 val state by profileViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(profileViewModel) { profileViewModel.initialize() }
                 ProfileScreen(
                     state = state,
                     onOrders = { navController.navigate(AppRoute.Orders) },
@@ -347,6 +349,8 @@ fun AppNavHost(
                     onDismissLogout = profileViewModel::dismissLogout,
                     onConfirmLogout = { profileViewModel.confirmLogout() },
                     onLanguageChange = profileViewModel::setLanguage,
+                    onRetry = { profileViewModel.retry() },
+                    onLoadMore = { profileViewModel.loadMore() },
                     bottomBar = { TopLevelNavigationBar(navController) },
                 )
             }
@@ -589,8 +593,13 @@ fun AppNavHost(
             if (container == null) {
                 PlaceholderScreen(navController, AppRoute.Points, R.string.points_title, R.string.points_placeholder)
             } else {
-                val factory = remember(container.pointsRepository) {
-                    ViewModelFactory<PointsViewModel> { PointsViewModel(container.pointsRepository) }
+                val factory = remember(container.pointsRepository, container.appDataSync) {
+                    ViewModelFactory<PointsViewModel> {
+                        PointsViewModel(
+                            container.pointsRepository,
+                            appDataSync = container.appDataSync,
+                        )
+                    }
                 }
                 val pointsViewModel: PointsViewModel = viewModel(factory = factory)
                 val state by pointsViewModel.uiState.collectAsStateWithLifecycle()

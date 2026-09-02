@@ -559,6 +559,38 @@ class SessionManagerTest {
     }
 
     @Test
+    fun replaceUserUpdatesProfileWithoutChangingLoginSessionOrTokens() = runBlocking {
+        val store = FakeSessionStore()
+        val state = SessionState()
+        val manager = SessionManager(store, state)
+        val installed = (manager.install(sampleTokenBundle()) as AppResult.Success).value
+        val stored = store.lastWritten
+
+        val replaced = manager.replaceUser(
+            User("student-1", "fresh-name", UserRole.STUDENT, 160),
+        )
+
+        assertTrue(replaced)
+        assertEquals("fresh-name", state.active.value?.user?.username)
+        assertEquals(160, state.active.value?.user?.pointsBalance)
+        assertEquals(installed.generation, state.active.value?.generation)
+        assertEquals(installed.loginSessionId, state.active.value?.loginSessionId)
+        assertEquals(installed.accessToken, state.active.value?.accessToken)
+        assertEquals(stored, store.lastWritten)
+    }
+
+    @Test
+    fun replaceUserIgnoresDifferentAccountAndSignedOutSession() = runBlocking {
+        val state = SessionState()
+        val manager = SessionManager(FakeSessionStore(), state)
+        assertFalse(manager.replaceUser(User("student-1", "a", UserRole.STUDENT, 1)))
+
+        manager.install(sampleTokenBundle())
+        assertFalse(manager.replaceUser(User("other", "a", UserRole.STUDENT, 1)))
+        assertEquals("student", state.active.value?.user?.username)
+    }
+
+    @Test
     fun cancellationDuringClearIsRethrownAfterMemoryIsCleared() = runBlocking {
         val cancellation = CancellationException("cancelled")
         val state = SessionState()

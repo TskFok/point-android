@@ -69,6 +69,19 @@ class AppDataSyncTest {
     }
 
     @Test
+    fun recordBalanceUpdatesCurrentSessionWithoutAdvancingRefreshRevisions() {
+        val sessionState = SessionState().apply { publish(activeSession("student-a", 1)) }
+        val sync = AppDataSync(sessionState)
+        val session = checkNotNull(sync.captureSession())
+
+        sync.recordBalance(session, 160)
+
+        assertEquals(160, sync.state.value.balance)
+        assertEquals(0L, sync.state.value.homeRefreshRevision)
+        assertEquals(0L, sync.state.value.shopRefreshRevision)
+    }
+
+    @Test
     fun sameAccountCredentialRefreshMustNotClearUnacknowledgedTombstone() {
         val sessionState = SessionState().apply { publish(activeSession("student-a", 1)) }
         val sync = AppDataSync(sessionState)

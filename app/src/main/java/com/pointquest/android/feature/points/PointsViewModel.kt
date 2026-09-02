@@ -3,6 +3,7 @@ package com.pointquest.android.feature.points
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pointquest.android.R
+import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PointLedgerEntry
 import com.pointquest.android.core.network.AppResult
@@ -12,11 +13,15 @@ import com.pointquest.android.core.ui.UiErrorMapper
 import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.data.points.PointsRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 data class PointsUiState(
@@ -35,6 +40,7 @@ data class PointsUiState(
 class PointsViewModel(
     private val repository: PointsRepository,
     private val scopeOverride: CoroutineScope? = null,
+    private val appDataSync: AppDataSync? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(PointsUiState())
     private val initializationLock = Any()
@@ -52,6 +58,7 @@ class PointsViewModel(
     fun initialize(): Job? = synchronized(initializationLock) {
         if (initialized) return@synchronized null
         initialized = true
+        observeAppDataSync()
         load(loadBalance = true, loadLedger = true)
     }
 
@@ -66,6 +73,28 @@ class PointsViewModel(
         return scope.launch {
             requestMore(state.paged.meta.page + 1, mutableSetOf())
         }.also { loadMoreJob = it }
+    }
+
+    private fun observeAppDataSync() {
+        val sync = appDataSync ?: return
+        scope.launch {
+            sync.state.collect { state ->
+                state.balance?.takeIf { state.session != null }?.let { balance ->
+                    mutableUiState.value = mutableUiState.value.copy(balance = balance)
+                }
+            }
+        }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            sync.state
+                .map { it.session to it.homeRefreshRevision }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { (session, _) ->
+                    if (session == null) return@collect
+                    loadingJob?.cancel()
+                    load(loadBalance = true, loadLedger = true)
+                }
+        }
     }
 
     private fun load(loadBalance: Boolean, loadLedger: Boolean): Job {
@@ -86,7 +115,11 @@ class PointsViewModel(
         when (result) {
             is AppResult.Success -> {
                 balanceFailed = false
-                mutableUiState.value = mutableUiState.value.copy(balance = result.value.coerceAtLeast(0))
+                val balance = result.value.coerceAtLeast(0)
+                mutableUiState.value = mutableUiState.value.copy(balance = balance)
+                appDataSync?.captureSession()?.let { session ->
+                    appDataSync.recordBalance(session, balance)
+                }
             }
             is AppResult.Failure -> balanceFailed = true
         }

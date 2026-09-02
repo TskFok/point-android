@@ -301,6 +301,9 @@ class QuestionScreenTest {
             }
         }
 
+        composeRule.onNodeWithText("当前法语暂无未答题").assertIsDisplayed()
+        composeRule.onNodeWithText("当前语言偏好下已没有未答的法语题目。可调整学习语言偏好，或去复习错题。")
+            .assertIsDisplayed()
         composeRule.onNodeWithText("返回练习").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("错题本").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("开始预习").assertIsDisplayed().performClick()

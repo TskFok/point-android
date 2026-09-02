@@ -8,6 +8,7 @@ import com.pointquest.android.core.model.PointLedgerEntry
 import com.pointquest.android.core.model.PracticeSummary
 import com.pointquest.android.core.model.Product
 import com.pointquest.android.core.model.Question
+import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.network.AppResult
 
@@ -46,4 +47,6 @@ interface StudentGateway {
     suspend fun createOrder(productId: String, key: String): AppResult<Order>
     suspend fun orders(page: Int, pageSize: Int): AppResult<Page<Order>>
     suspend fun order(id: String): AppResult<Order>
+    suspend fun currentUser(): AppResult<User> =
+        error("StudentGateway.currentUser is not implemented.")
 }

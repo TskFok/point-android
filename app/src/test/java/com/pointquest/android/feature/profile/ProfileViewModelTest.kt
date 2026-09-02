@@ -5,11 +5,16 @@ import com.pointquest.android.core.auth.ActiveSession
 import com.pointquest.android.app.AppDataSync
 import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.LearnerLanguage
+import com.pointquest.android.core.model.Page
+import com.pointquest.android.core.model.PageMeta
+import com.pointquest.android.core.model.PointLedgerEntry
+import com.pointquest.android.core.model.PointLedgerType
 import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.data.auth.AuthRepository
+import com.pointquest.android.data.points.PointsRepository
 import com.pointquest.android.data.preferences.LearnerLanguageStore
 import com.pointquest.android.test.FakeLearnerLanguageStore
 import java.time.Instant
@@ -77,6 +82,7 @@ class ProfileViewModelTest {
             sessionState,
             FakeLearnerLanguageStore(LearnerLanguage.ALL),
             testScope(),
+            pointsRepository = FakePointsRepository(),
         )
 
         sessionState.publish(activeSession("student", 42, 1))
@@ -97,6 +103,7 @@ class ProfileViewModelTest {
             SessionState(),
             FakeLearnerLanguageStore(LearnerLanguage.ALL),
             testScope(),
+            pointsRepository = FakePointsRepository(),
         )
 
         viewModel.requestLogout()
@@ -158,16 +165,68 @@ class ProfileViewModelTest {
         assertEquals(77, viewModel.uiState.value.user?.pointsBalance)
     }
 
+    @Test
+    fun initializeLoadsCurrentUserBalanceAndLedgerTogether() = runBlocking {
+        val sessionState = SessionState().apply { publish(activeSession("stale", 42, 1, "id-a")) }
+        val auth = FakeAuthRepository(
+            currentUserResult = AppResult.Success(User("id-a", "learner", UserRole.STUDENT, 160)),
+        )
+        val points = FakePointsRepository(
+            balanceResult = AppResult.Success(160),
+            ledger = listOf(ledgerEntry("ledger-1", 20, 160)),
+        )
+        val viewModel = ProfileViewModel(
+            auth,
+            sessionState,
+            FakeLearnerLanguageStore(LearnerLanguage.ALL),
+            testScope(),
+            pointsRepository = points,
+        )
+
+        viewModel.initialize()?.join()
+
+        assertEquals("learner", viewModel.uiState.value.user?.username)
+        assertEquals(160, viewModel.uiState.value.user?.pointsBalance)
+        assertEquals(listOf("ledger-1"), viewModel.uiState.value.items.map(PointLedgerEntry::id))
+        assertEquals(1, auth.currentUserCalls)
+        assertEquals(1, points.balanceCalls)
+        assertEquals(listOf(1), points.pageCalls)
+    }
+
     private class FakeAuthRepository(
         private val logoutDeferred: CompletableDeferred<Unit>? = null,
+        private val currentUserResult: AppResult<User> = AppResult.Success(
+            User("student-1", "student", UserRole.STUDENT, 42),
+        ),
     ) : AuthRepository {
         var logoutCalls = 0
+        var currentUserCalls = 0
         override suspend fun register(username: String, password: String): AppResult<User> = error("unused")
         override suspend fun login(username: String, password: String): AppResult<User> = error("unused")
         override suspend fun restore(): AppResult<User> = error("unused")
+        override suspend fun currentUser(): AppResult<User> {
+            currentUserCalls++
+            return currentUserResult
+        }
         override suspend fun logout() {
             logoutCalls++
             logoutDeferred?.await()
+        }
+    }
+
+    private class FakePointsRepository(
+        var balanceResult: AppResult<Int> = AppResult.Success(42),
+        var ledger: List<PointLedgerEntry> = emptyList(),
+    ) : PointsRepository {
+        var balanceCalls = 0
+        val pageCalls = mutableListOf<Int>()
+        override suspend fun balance(): AppResult<Int> {
+            balanceCalls++
+            return balanceResult
+        }
+        override suspend fun ledger(page: Int): AppResult<Page<PointLedgerEntry>> {
+            pageCalls += page
+            return AppResult.Success(Page(ledger, PageMeta(page, 20, ledger.size, 1)))
         }
     }
 
@@ -197,6 +256,10 @@ class ProfileViewModelTest {
             accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
             generation = generation,
             loginSessionId = generation,
+        )
+        fun ledgerEntry(id: String, delta: Int, balanceAfter: Int) = PointLedgerEntry(
+            id, "id-a", PointLedgerType.ANSWER_REWARD, delta, balanceAfter, "a1", null,
+            Instant.parse("2026-07-30T08:00:00Z"),
         )
     }
 }

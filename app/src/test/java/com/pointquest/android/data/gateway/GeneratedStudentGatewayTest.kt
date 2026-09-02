@@ -142,6 +142,19 @@ class GeneratedStudentGatewayTest {
     }
 
     @Test
+    fun currentUserMapsAuthMePathAndPublicUser() = runBlocking {
+        enqueue("""{"user":{"id":"student-1","pointsBalance":160,"role":"STUDENT","username":"learner"}}""")
+
+        val user = (gateway.currentUser() as AppResult.Success).value
+
+        assertEquals("student-1", user.id)
+        assertEquals("learner", user.username)
+        assertEquals(UserRole.STUDENT, user.role)
+        assertEquals(160, user.pointsBalance)
+        assertRequest("/api/v1/auth/me")
+    }
+
+    @Test
     fun pointsMapBalanceAndEveryLedgerField() = runBlocking {
         enqueue("""{"balance":42}""")
         enqueue(ledgerJson)

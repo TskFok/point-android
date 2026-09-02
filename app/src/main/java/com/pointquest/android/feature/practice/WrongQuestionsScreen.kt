@@ -25,7 +25,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.pointquest.android.R
-import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.ui.asString
 import com.pointquest.android.core.ui.components.AsyncContent
@@ -69,7 +68,7 @@ fun WrongQuestionsScreen(
                 modifier = Modifier.fillMaxSize(),
                 emptyContent = {
                     WrongQuestionsEmptyState(
-                        showProfileAction = state.language != LearnerLanguage.ALL,
+                        emptyCopy = wrongQuestionsEmptyCopy(state.language),
                         onFirstPractice = onFirstPractice,
                         onPreview = onPreview,
                         onProfile = onProfile,
@@ -116,7 +115,7 @@ fun WrongQuestionsScreen(
 
 @Composable
 private fun WrongQuestionsEmptyState(
-    showProfileAction: Boolean,
+    emptyCopy: LearnerEmptyCopy,
     onFirstPractice: () -> Unit,
     onPreview: () -> Unit,
     onProfile: () -> Unit,
@@ -126,11 +125,11 @@ private fun WrongQuestionsEmptyState(
         PointCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    stringResource(R.string.wrong_questions_empty_title),
+                    emptyCopy.titleText(),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    stringResource(R.string.wrong_questions_empty_copy),
+                    emptyCopy.descriptionText(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Button(
@@ -141,7 +140,7 @@ private fun WrongQuestionsEmptyState(
                     onClick = onPreview,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 ) { Text(stringResource(R.string.home_preview_action)) }
-                if (showProfileAction) {
+                if (emptyCopy.profileHint) {
                     TextButton(
                         onClick = onProfile,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("wrong_empty_profile"),

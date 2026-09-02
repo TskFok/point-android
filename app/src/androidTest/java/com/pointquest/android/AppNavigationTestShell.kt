@@ -139,6 +139,7 @@ internal class FakeAppDependencies(
             return AppResult.Success(user)
         }
         override suspend fun restore() = AppResult.Success(testStudent())
+        override suspend fun currentUser() = AppResult.Success(testStudent())
         override suspend fun logout() = Unit
     }
 

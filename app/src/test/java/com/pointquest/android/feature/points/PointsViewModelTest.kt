@@ -1,10 +1,15 @@
 package com.pointquest.android.feature.points
 
 import com.pointquest.android.R
+import com.pointquest.android.app.AppDataSync
+import com.pointquest.android.core.auth.ActiveSession
+import com.pointquest.android.core.auth.SessionState
 import com.pointquest.android.core.model.Page
 import com.pointquest.android.core.model.PageMeta
 import com.pointquest.android.core.model.PointLedgerEntry
 import com.pointquest.android.core.model.PointLedgerType
+import com.pointquest.android.core.model.User
+import com.pointquest.android.core.model.UserRole
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
 import com.pointquest.android.core.ui.UiText
@@ -86,6 +91,40 @@ class PointsViewModelTest {
         assertEquals(listOf("e1", "e2", "e3"), viewModel.uiState.value.items.map(PointLedgerEntry::id))
         assertTrue(viewModel.uiState.value.loadMoreError != null)
         assertFalse(viewModel.uiState.value.loadingMore)
+    }
+
+    @Test
+    fun appDataSyncBalanceCoversStalePageAndRevisionReloadsLedger() = runTest {
+        val sessionState = SessionState().apply {
+            publish(
+                ActiveSession(
+                    user = User("u1", "student", UserRole.STUDENT, 20),
+                    accessToken = "token",
+                    accessTokenExpiresAt = Instant.parse("2030-01-01T00:05:00Z"),
+                    generation = 1,
+                    loginSessionId = 1,
+                ),
+            )
+        }
+        val sync = AppDataSync(sessionState)
+        val repository = FakePointsRepository(balanceResult = AppResult.Success(20)).apply {
+            enqueue(success(page(1, 1, entry("e1"))))
+            enqueue(success(page(1, 1, entry("e2"))))
+        }
+        val viewModel = PointsViewModel(repository, backgroundScope, appDataSync = sync)
+        viewModel.initialize()?.join()
+        assertEquals(20, viewModel.uiState.value.balance)
+        assertEquals(listOf("e1"), viewModel.uiState.value.items.map(PointLedgerEntry::id))
+
+        repository.balanceResult = AppResult.Success(99)
+        sync.recordPracticeChanged(checkNotNull(sync.captureSession()), balance = 99)
+        runCurrent()
+        viewModel.loadingJob?.join()
+
+        assertEquals(99, viewModel.uiState.value.balance)
+        assertEquals(listOf("e2"), viewModel.uiState.value.items.map(PointLedgerEntry::id))
+        assertEquals(2, repository.balanceCalls)
+        assertEquals(listOf(1, 1), repository.pageCalls)
     }
 
     private class FakePointsRepository(

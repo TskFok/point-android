@@ -38,6 +38,9 @@ class WrongQuestionsScreenTest {
             }
         }
 
+        composeRule.onNodeWithText("当前法语暂无待练错题").assertIsDisplayed()
+        composeRule.onNodeWithText("当前语言偏好下没有待练的法语错题。可调整学习语言偏好，或继续随机练习。")
+            .assertIsDisplayed()
         composeRule.onNodeWithText("调整学习语言").assertIsDisplayed().performClick()
 
         assertTrue(profileOpened)

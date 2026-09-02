@@ -1,6 +1,7 @@
 package com.pointquest.android.core.auth
 
 import com.pointquest.android.core.model.TokenBundle
+import com.pointquest.android.core.model.User
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
 import kotlinx.coroutines.CancellationException
@@ -157,6 +158,14 @@ class SessionManager(
         )
         state.publish(activeSession)
         return AppResult.Success(activeSession)
+    }
+
+    suspend fun replaceUser(user: User): Boolean = mutex.withLock {
+        val current = state.active.value ?: return@withLock false
+        if (current.user.id != user.id) return@withLock false
+        if (current.user == user) return@withLock true
+        state.publish(current.copy(user = user))
+        true
     }
 
     private suspend fun cleanupLockedPreservingFailure(primaryFailure: Throwable? = null) {

@@ -69,6 +69,9 @@ class AppContainer(
         sessionManager,
         sessionState,
         refreshCoordinator,
+        studentGateway,
+        authorizedCallExecutor,
+        retryExecutor,
     )
     override val practiceRepository: PracticeRepository = DefaultPracticeRepository(
         studentGateway,

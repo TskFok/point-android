@@ -26,7 +26,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.pointquest.android.R
-import com.pointquest.android.core.model.LearnerLanguage
 import com.pointquest.android.core.ui.asString
 import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointPrimaryButton
@@ -162,16 +161,18 @@ private fun PreviewSetup(
         }
         if (state.emptyPool) {
             item {
+                val empty = previewEmptyCopy(state.language)
                 PointCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(stringResource(R.string.preview_empty_pool))
+                        Text(empty.titleText(), style = MaterialTheme.typography.titleMedium)
+                        Text(empty.descriptionText())
                         TextButton(
                             onClick = onWrongQuestions,
                             modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth().testTag("preview_empty_wrong_questions"),
                         ) {
                             Text(stringResource(R.string.preview_empty_pool_wrong_action))
                         }
-                        if (state.language != LearnerLanguage.ALL) {
+                        if (empty.profileHint) {
                             TextButton(
                                 onClick = onProfile,
                                 modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth().testTag("preview_empty_profile"),

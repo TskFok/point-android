@@ -8,6 +8,7 @@ import com.pointquest.android.core.model.PointLedgerEntry
 import com.pointquest.android.core.model.PracticeSummary
 import com.pointquest.android.core.model.Product
 import com.pointquest.android.core.model.Question
+import com.pointquest.android.core.model.User
 import com.pointquest.android.core.model.WrongQuestion
 import com.pointquest.android.core.network.AppError
 import com.pointquest.android.core.network.AppResult
@@ -125,6 +126,10 @@ class GeneratedStudentGateway(
 
     override suspend fun order(id: String): AppResult<Order> = networkCall {
         api.ordersGet(id).toAppResult { it.toDomain() }
+    }
+
+    override suspend fun currentUser(): AppResult<User> = networkCall {
+        api.authGetCurrentUser().toAppResult { it.user.toDomain() }
     }
 
     private suspend fun <T> networkCall(block: suspend () -> AppResult<T>): AppResult<T> = try {

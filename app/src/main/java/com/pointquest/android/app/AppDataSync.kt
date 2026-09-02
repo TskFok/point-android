@@ -48,6 +48,13 @@ class AppDataSync(sessionState: SessionState) {
         current.session?.let { ShopRefreshSnapshot(it, current.shopRefreshRevision) }
     }
 
+    fun recordBalance(session: AppDataSession, balance: Int) {
+        mutableState.update { current ->
+            if (current.session != session) return@update current
+            current.copy(balance = validBalance(balance) ?: current.balance)
+        }
+    }
+
     fun recordPracticeChanged(session: AppDataSession, balance: Int? = null) {
         mutableState.update { current ->
             if (current.session != session) return@update current

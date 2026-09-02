@@ -52,11 +52,11 @@ fun QuestionScreen(
                 CircularProgressIndicator(Modifier.semantics { contentDescription = loading })
             }
             state.completed -> PracticeCompleted(
+                emptyCopy = practiceEmptyCopy(state.language),
                 onPractice = onNext,
                 onWrongQuestions = onWrongQuestions,
                 onPreview = onPreview,
                 onProfile = onProfile,
-                showProfileAction = state.language != com.pointquest.android.core.model.LearnerLanguage.ALL,
                 modifier = Modifier.padding(padding),
             )
             state.question != null -> {
@@ -140,7 +140,7 @@ fun QuestionScreen(
                 if (state.completed && state.mode == PracticeMode.FIRST) {
                     item {
                         Text(
-                            stringResource(R.string.practice_completed_copy),
+                            practiceEmptyCopy(state.language).descriptionText(),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -211,11 +211,11 @@ private fun TailLoadError(message: String, onRetryTailLoad: () -> Unit) {
 
 @Composable
 private fun PracticeCompleted(
+    emptyCopy: LearnerEmptyCopy,
     onPractice: () -> Unit,
     onWrongQuestions: () -> Unit,
     onPreview: () -> Unit,
     onProfile: () -> Unit,
-    showProfileAction: Boolean,
     modifier: Modifier,
 ) {
     Column(
@@ -225,8 +225,8 @@ private fun PracticeCompleted(
     ) {
         PointCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(stringResource(R.string.practice_completed_title), style = MaterialTheme.typography.headlineSmall)
-                Text(stringResource(R.string.practice_completed_copy))
+                Text(emptyCopy.titleText(), style = MaterialTheme.typography.headlineSmall)
+                Text(emptyCopy.descriptionText())
                 PointPrimaryButton(stringResource(R.string.practice_completed_action), onPractice)
                 TextButton(onClick = onWrongQuestions, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
                     Text(stringResource(R.string.home_wrong_questions))
@@ -234,7 +234,7 @@ private fun PracticeCompleted(
                 TextButton(onClick = onPreview, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
                     Text(stringResource(R.string.home_preview_action))
                 }
-                if (showProfileAction) {
+                if (emptyCopy.profileHint) {
                     TextButton(
                         onClick = onProfile,
                         modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth().testTag("practice_completed_profile"),

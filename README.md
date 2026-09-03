@@ -85,9 +85,27 @@ cd ../point-android
   -PpointApiBaseUrl=https://api.example.invalid/
 ```
 
+需要一份已校验、可直接安装的 APK 时，用仓库根目录的 `build-apk.sh`。脚本会编译对应变体、用 SDK Build Tools 做 `aapt2 dump badging` 与 `apksigner verify`，再把产物复制到项目根目录。
+
+```bash
+# Release（默认），产物为 ./release.apk
+./build-apk.sh
+./build-apk.sh release
+
+# Debug，产物为 ./debug.apk
+./build-apk.sh debug
+```
+
+- 第一个参数只能是 `release` 或 `debug`；其他值会打印 `用法: ./build-apk.sh [release|debug]` 并退出。
+- 未设置 `ANDROID_HOME` / `ANDROID_SDK_ROOT` 时，脚本会尝试 macOS 默认 SDK 路径 `~/Library/Android/sdk`。
+- Release 构建仍会传入 `-PpointApiBaseUrl=https://api.example.invalid/`，仅用于本地构建验证。
+- 校验需要 SDK `build-tools` 中同时包含可执行 `aapt2` 和 `apksigner` 的稳定版（`x.y.z`）。
+
 主要产物：
 
+- 脚本输出（根目录）：`./release.apk`、`./debug.apk`
 - Debug APK：`app/build/outputs/apk/debug/app-debug.apk`
+- Release APK：`app/build/outputs/apk/release/app-release.apk`
 - 未签名 Release APK：`app/build/outputs/apk/release/app-release-unsigned.apk`
 - Debug instrumentation APK：`app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`
 - JVM 测试报告：`app/build/reports/tests/`

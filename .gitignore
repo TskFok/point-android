@@ -5,3 +5,6 @@ local.properties
 .idea/
 .superpowers/
 .planning/
+/release.apk
+/debug.apk
+

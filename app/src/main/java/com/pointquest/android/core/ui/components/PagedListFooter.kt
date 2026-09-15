@@ -2,12 +2,15 @@ package com.pointquest.android.core.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import com.pointquest.android.R
 import com.pointquest.android.core.ui.UiText
 import com.pointquest.android.core.ui.asString
@@ -46,19 +50,20 @@ fun PagedListFooter(
             ) {
                 CircularProgressIndicator(
                     modifier = Modifier
-                        .height(32.dp)
+                        .size(24.dp)
                         .semantics { contentDescription = description },
+                    strokeWidth = 2.dp,
                 )
             }
         }
-        is PagedListFooterState.Error -> Row(
+        is PagedListFooterState.Error -> Column(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(state.message.asString())
+            Text(state.message.asString(), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
             TextButton(
                 onClick = onRetry,
                 modifier = Modifier.heightIn(min = 48.dp),
@@ -66,6 +71,9 @@ fun PagedListFooter(
         }
         PagedListFooterState.End -> Text(
             stringResource(R.string.list_end),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
             modifier = modifier
                 .fillMaxWidth()
                 .padding(16.dp),

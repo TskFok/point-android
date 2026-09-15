@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
@@ -92,7 +95,8 @@ fun AppNavHost(
         viewModel<RemoteHostViewModel>(factory = remoteHostFactory)
     }
 
-    LaunchedEffect(sessionStatus) {
+    // User/profile refreshes must not reset navigation within the same signed-in account.
+    LaunchedEffect(startDestination, (sessionStatus as? SessionStatus.SignedIn)?.user?.id) {
         val target = resolver.resolve(sessionStatus)
         AppNavigationPolicy.rootRequest(
             sessionStatus = sessionStatus,
@@ -681,16 +685,41 @@ private fun TopLevelNavigationBar(navController: NavHostController) {
         TopLevelDestination(AppRoute.Profile, R.string.tab_profile, TopLevelIcon.Profile),
     )
 
-    NavigationBar {
+    val lineColor = MaterialTheme.colorScheme.outlineVariant
+    val activeColor = MaterialTheme.colorScheme.primary
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
+        modifier = Modifier.drawBehind {
+            drawLine(lineColor, Offset.Zero, Offset(size.width, 0f), 1.dp.toPx())
+        },
+    ) {
         destinations.forEach { destination ->
             val selected = currentDestination.matches(destination.route)
             val label = stringResource(destination.labelRes)
             NavigationBarItem(
+                modifier = Modifier.semantics { contentDescription = label }.drawBehind {
+                    if (selected) {
+                        drawLine(
+                            activeColor,
+                            Offset(12.dp.toPx(), 0f),
+                            Offset(size.width - 12.dp.toPx(), 0f),
+                            2.dp.toPx(),
+                        )
+                    }
+                },
                 selected = selected,
                 onClick = { navController.navigateTopLevel(destination.route) },
-                icon = { TopLevelIcon(destination.icon, label, selected) },
+                icon = { TopLevelIcon(destination.icon, selected) },
                 label = { Text(label) },
                 alwaysShowLabel = true,
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = Color.Transparent,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
             )
         }
     }
@@ -731,12 +760,10 @@ private data class TopLevelDestination(
 private enum class TopLevelIcon { Home, Practice, Shop, Profile }
 
 @Composable
-private fun TopLevelIcon(icon: TopLevelIcon, label: String, selected: Boolean) {
-    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+private fun TopLevelIcon(icon: TopLevelIcon, selected: Boolean) {
+    val color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Canvas(
-        Modifier
-            .size(24.dp)
-            .semantics { contentDescription = label },
+        Modifier.size(24.dp),
     ) {
         val stroke = size.minDimension * 0.09f
         when (icon) {

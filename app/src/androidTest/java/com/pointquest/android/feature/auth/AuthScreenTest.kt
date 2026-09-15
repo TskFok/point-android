@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.pointquest.android.R
@@ -64,7 +65,12 @@ class AuthScreenTest {
         composeRule.onNodeWithTag("login_password").assert(
             SemanticsMatcher.expectValue(SemanticsProperties.Password, Unit),
         )
-        composeRule.onNodeWithText("secret-password1").assertDoesNotExist()
+        composeRule.onNodeWithTag("login_password").assert(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.EditableText,
+                AnnotatedString("••••••••••••••••"),
+            ),
+        )
     }
 
     @Test

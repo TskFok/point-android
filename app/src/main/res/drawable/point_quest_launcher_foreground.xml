@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:inset="4dp">
+    <bitmap
+        android:src="@drawable/point_quest_icon"
+        android:gravity="fill"
+        android:filter="true" />
+</inset>

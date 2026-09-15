@@ -1,7 +1,9 @@
 package com.pointquest.android.feature.auth
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +21,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -50,11 +53,20 @@ fun LoginScreen(
     onApplyHost: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val scrollState = rememberScrollState()
+    LaunchedEffect(hostState.error) {
+        if (hostState.error != null) scrollState.scrollTo(0)
+    }
     PointScaffold(title = stringResource(R.string.login_title), modifier = modifier) { padding ->
-        AuthFormContainer(padding) {
+        AuthFormContainer(padding, scrollState) {
             Text(
                 text = stringResource(R.string.login_welcome),
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineLarge,
+            )
+            Text(
+                text = stringResource(R.string.paper_login_intro),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             state.message?.let { message ->
                 Text(
@@ -67,70 +79,74 @@ fun LoginScreen(
                 )
             }
             val controlsEnabled = !state.submitting && !hostState.applying
-            AuthTextField(
-                value = hostState.draftHost,
-                onValueChange = onHostChange,
-                label = stringResource(R.string.remote_host_label),
-                error = hostState.error?.asString(),
-                enabled = controlsEnabled,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                modifier = Modifier.testTag("login_host"),
-            )
-            OutlinedButton(
-                onClick = onApplyHost,
-                enabled = controlsEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .testTag("login_host_apply"),
-            ) {
-                Text(stringResource(R.string.remote_host_apply_action))
-            }
-            hostState.message?.let { message ->
-                Text(
-                    text = message.asString(),
-                    color = SuccessText,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            AuthSection(title = stringResource(R.string.paper_auth_server_section)) {
+                AuthTextField(
+                    value = hostState.draftHost,
+                    onValueChange = onHostChange,
+                    label = stringResource(R.string.remote_host_label),
+                    error = hostState.error?.asString(),
+                    enabled = controlsEnabled,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    modifier = Modifier.testTag("login_host"),
                 )
+                OutlinedButton(
+                    onClick = onApplyHost,
+                    enabled = controlsEnabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("login_host_apply"),
+                ) {
+                    Text(stringResource(R.string.remote_host_apply_action))
+                }
+                hostState.message?.let { message ->
+                    Text(
+                        text = message.asString(),
+                        color = SuccessText,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
             }
-            AuthTextField(
-                value = state.username,
-                onValueChange = onUsernameChange,
-                label = stringResource(R.string.auth_username),
-                error = state.usernameError?.asString(),
-                enabled = controlsEnabled,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                modifier = Modifier.testTag("login_username"),
-            )
-            AuthTextField(
-                value = state.password,
-                onValueChange = onPasswordChange,
-                label = stringResource(R.string.auth_password),
-                error = state.passwordError?.asString(),
-                enabled = controlsEnabled,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(onDone = { onLogin() }),
-                password = true,
-                modifier = Modifier.testTag("login_password"),
-            )
-            PointPrimaryButton(
-                text = if (state.submitting) {
-                    stringResource(R.string.auth_submitting)
-                } else {
-                    stringResource(R.string.auth_login_action)
-                },
-                onClick = onLogin,
-                enabled = controlsEnabled,
-                modifier = Modifier.testTag("login_submit"),
-            )
-            if (state.submitting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    strokeWidth = 3.dp,
+            AuthSection(title = stringResource(R.string.paper_auth_login_section)) {
+                AuthTextField(
+                    value = state.username,
+                    onValueChange = onUsernameChange,
+                    label = stringResource(R.string.auth_username),
+                    error = state.usernameError?.asString(),
+                    enabled = controlsEnabled,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    modifier = Modifier.testTag("login_username"),
                 )
+                AuthTextField(
+                    value = state.password,
+                    onValueChange = onPasswordChange,
+                    label = stringResource(R.string.auth_password),
+                    error = state.passwordError?.asString(),
+                    enabled = controlsEnabled,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { onLogin() }),
+                    password = true,
+                    modifier = Modifier.testTag("login_password"),
+                )
+                PointPrimaryButton(
+                    text = if (state.submitting) {
+                        stringResource(R.string.auth_submitting)
+                    } else {
+                        stringResource(R.string.auth_login_action)
+                    },
+                    onClick = onLogin,
+                    enabled = controlsEnabled,
+                    modifier = Modifier.testTag("login_submit"),
+                )
+                if (state.submitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                        strokeWidth = 3.dp,
+                    )
+                }
             }
             TextButton(
                 onClick = onRegister,
@@ -148,22 +164,32 @@ fun LoginScreen(
 @Composable
 internal fun AuthFormContainer(
     padding: PaddingValues,
+    scrollState: ScrollState,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.Center,
-    ) {
-        PointCard(Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                content = content,
-            )
+            .verticalScroll(scrollState)
+            .padding(horizontal = 16.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        content = content,
+    )
+}
+
+@Composable
+internal fun AuthSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    PointCard(Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            content()
         }
     }
 }

@@ -4,15 +4,18 @@ import androidx.compose.ui.graphics.Color
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ThemeContrastTest {
     @Test
-    fun specifiedTertiaryAndErrorBaseColorsRemainUnchanged() {
-        assertEquals(Color(0xFF238B57), PointQuestColorScheme.tertiary)
-        assertEquals(Color(0xFFD64545), PointQuestColorScheme.error)
+    fun interactiveAndErrorTextAreReadableOnPageAndCardSurfaces() {
+        val scheme = PointQuestColorScheme
+        listOf(scheme.background, scheme.surface).forEach { surface ->
+            listOf(scheme.primary, scheme.error, scheme.onSurfaceVariant).forEach { text ->
+                assertTrue("Action, error and secondary text must reach 4.5:1", contrastRatio(text, surface) >= 4.5)
+            }
+        }
     }
 
     @Test
@@ -24,6 +27,13 @@ class ThemeContrastTest {
             "surface/onSurface" to (PointQuestColorScheme.surface to PointQuestColorScheme.onSurface),
             "tertiary/onTertiary" to (PointQuestColorScheme.tertiary to PointQuestColorScheme.onTertiary),
             "error/onError" to (PointQuestColorScheme.error to PointQuestColorScheme.onError),
+            "primaryContainer/onPrimaryContainer" to (PointQuestColorScheme.primaryContainer to PointQuestColorScheme.onPrimaryContainer),
+            "secondaryContainer/onSecondaryContainer" to (PointQuestColorScheme.secondaryContainer to PointQuestColorScheme.onSecondaryContainer),
+            "tertiaryContainer/onTertiaryContainer" to (PointQuestColorScheme.tertiaryContainer to PointQuestColorScheme.onTertiaryContainer),
+            "errorContainer/onErrorContainer" to (PointQuestColorScheme.errorContainer to PointQuestColorScheme.onErrorContainer),
+            "surfaceVariant/onSurfaceVariant" to (PointQuestColorScheme.surfaceVariant to PointQuestColorScheme.onSurfaceVariant),
+            "surfaceContainer/onSurface" to (PointQuestColorScheme.surfaceContainer to PointQuestColorScheme.onSurface),
+            "inverseSurface/inverseOnSurface" to (PointQuestColorScheme.inverseSurface to PointQuestColorScheme.inverseOnSurface),
         )
         val failures = pairs.mapNotNull { (name, colors) ->
             val contrast = contrastRatio(colors.first, colors.second)
@@ -37,19 +47,19 @@ class ThemeContrastTest {
     }
 
     @Test
-    fun authenticationTextColorsMeetWcagAaAgainstProductionWhiteSurface() {
+    fun authenticationTextColorsMeetWcagAaAgainstPaperSurface() {
         val pairs = listOf(
             "auth success text" to SuccessText,
             "auth error text" to ErrorText,
-            "auth helper text" to ClassroomInk,
+            "auth helper text" to PaperInk,
         )
         val failures = pairs.mapNotNull { (name, foreground) ->
-            val contrast = contrastRatio(foreground, ClassroomSurface)
+            val contrast = contrastRatio(foreground, PaperSurface)
             if (contrast < MIN_NORMAL_TEXT_CONTRAST) "$name=${"%.3f".format(contrast)}:1" else null
         }
 
         assertTrue(
-            "Authentication text colors below 4.5:1 on white: ${failures.joinToString()}",
+            "Authentication text colors below 4.5:1 on paper: ${failures.joinToString()}",
             failures.isEmpty(),
         )
     }

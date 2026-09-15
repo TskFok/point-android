@@ -1,25 +1,37 @@
 package com.pointquest.android.feature.profile
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -34,6 +46,7 @@ import com.pointquest.android.core.ui.components.PointScaffold
 import com.pointquest.android.core.ui.labelRes
 import com.pointquest.android.feature.points.PointLedgerRow
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     state: ProfileUiState,
@@ -60,13 +73,29 @@ fun ProfileScreen(
         ) {
             item {
                 PointCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(state.user?.username.orEmpty(), style = MaterialTheme.typography.headlineSmall)
-                        Text(stringResource(R.string.profile_student_role))
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = stringResource(R.string.paper_profile_account),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(state.user?.username.orEmpty(), style = MaterialTheme.typography.headlineLarge)
+                        Text(
+                            text = stringResource(R.string.profile_student_role),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                         SelectionContainer {
-                            Text(stringResource(R.string.profile_account_id, state.user?.id.orEmpty()))
+                            Text(
+                                text = stringResource(R.string.profile_account_id, state.user?.id.orEmpty()),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                        Text(stringResource(R.string.profile_points, state.user?.pointsBalance ?: 0))
+                        HorizontalDivider(Modifier.padding(vertical = 6.dp))
+                        Text(
+                            text = stringResource(R.string.profile_points, state.user?.pointsBalance ?: 0),
+                            style = MaterialTheme.typography.titleLarge,
+                        )
                     }
                 }
             }
@@ -74,16 +103,26 @@ fun ProfileScreen(
                 PointCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            stringResource(R.string.profile_language_title),
-                            style = MaterialTheme.typography.titleMedium,
+                            stringResource(R.string.paper_profile_settings),
+                            style = MaterialTheme.typography.titleLarge,
                         )
-                        LearnerLanguage.entries.forEach { language ->
-                            LanguageAction(
-                                text = stringResource(language.labelRes()),
-                                selected = language == state.language,
-                                enabled = !state.loggingOut,
-                            ) {
-                                onLanguageChange(language)
+                        Text(
+                            text = stringResource(R.string.profile_language_title),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            LearnerLanguage.entries.forEach { language ->
+                                LanguageAction(
+                                    text = stringResource(language.labelRes()),
+                                    selected = language == state.language,
+                                    enabled = !state.loggingOut,
+                                ) {
+                                    onLanguageChange(language)
+                                }
                             }
                         }
                         state.languagePersistenceError?.let { error ->
@@ -96,9 +135,31 @@ fun ProfileScreen(
                 }
             }
             item {
+                PointCard(Modifier.fillMaxWidth()) {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.paper_profile_records),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(start = 20.dp, top = 18.dp, bottom = 8.dp),
+                        )
+                        SettingAction(
+                            text = stringResource(R.string.profile_orders),
+                            enabled = !state.loggingOut,
+                            onClick = onOrders,
+                        )
+                        HorizontalDivider(Modifier.padding(horizontal = 20.dp))
+                        SettingAction(
+                            text = stringResource(R.string.profile_points_ledger),
+                            enabled = !state.loggingOut,
+                            onClick = onPoints,
+                        )
+                    }
+                }
+            }
+            item {
                 Text(
                     stringResource(R.string.profile_ledger_title),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                 )
             }
             when {
@@ -154,8 +215,6 @@ fun ProfileScreen(
                     }
                 }
             }
-            item { ProfileAction(stringResource(R.string.profile_orders), !state.loggingOut, onOrders) }
-            item { ProfileAction(stringResource(R.string.profile_points_ledger), !state.loggingOut, onPoints) }
             item {
                 OutlinedButton(
                     onClick = onRequestLogout,
@@ -191,24 +250,50 @@ fun ProfileScreen(
 }
 
 @Composable
-private fun ProfileAction(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-    ) { Text(text) }
+private fun SettingAction(text: String, enabled: Boolean, onClick: () -> Unit) {
+    val actionColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f)
+    val chevronColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = text, color = actionColor, modifier = Modifier.weight(1f))
+        Canvas(Modifier.size(20.dp)) {
+            val strokeWidth = 2.dp.toPx()
+            drawLine(
+                color = chevronColor,
+                start = Offset(size.width * 0.38f, size.height * 0.24f),
+                end = Offset(size.width * 0.62f, size.height * 0.5f),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = chevronColor,
+                start = Offset(size.width * 0.62f, size.height * 0.5f),
+                end = Offset(size.width * 0.38f, size.height * 0.76f),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round,
+            )
+        }
+    }
 }
 
 @Composable
 private fun LanguageAction(text: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
-    val modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-    if (selected) {
-        Button(onClick = onClick, enabled = enabled, modifier = modifier) {
-            Text(stringResource(R.string.profile_language_selected, text))
-        }
-    } else {
-        OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
-            Text(text)
-        }
-    }
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        enabled = enabled,
+        label = {
+            Text(
+                if (selected) stringResource(R.string.profile_language_selected, text)
+                else text,
+            )
+        },
+        modifier = Modifier.heightIn(min = 48.dp),
+    )
 }

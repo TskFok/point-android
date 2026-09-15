@@ -57,7 +57,7 @@ class ProductDetailScreenTest {
             .assertHeightIsAtLeast(48.dp)
             .assertIsEnabled()
             .performClick()
-        composeRule.onNodeWithText("确认兑换").assertIsDisplayed()
+        composeRule.onNodeWithTag("product_redeem_confirm").assertIsDisplayed()
         composeRule.onNodeWithText("现有积分：20").assertIsDisplayed()
         composeRule.onNodeWithText("本次兑换：10 积分").assertIsDisplayed()
         composeRule.onNodeWithText("兑换后余额：10 积分").assertIsDisplayed()

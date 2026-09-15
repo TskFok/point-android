@@ -58,7 +58,10 @@ private fun LoadingState(modifier: Modifier) {
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        CircularProgressIndicator(Modifier.semantics { contentDescription = description })
+        CircularProgressIndicator(
+            modifier = Modifier.size(32.dp).semantics { contentDescription = description },
+            strokeWidth = 2.dp,
+        )
     }
 }
 

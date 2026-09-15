@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="paper_practice_catalog_label">练习目录</string>
+    <string name="paper_practice_catalog_title">按你的节奏，翻开下一页</string>
+    <string name="paper_practice_catalog_copy">从未答题开始，回看容易出错的内容，或先预习新的题目。</string>
+    <string name="paper_practice_first_number">01</string>
+    <string name="paper_practice_first_copy">完成尚未作答的题目，并记录第一次作答结果。</string>
+    <string name="paper_practice_wrong_number">02</string>
+    <string name="paper_practice_wrong_copy">集中重练答错的题目，逐道巩固薄弱内容。</string>
+    <string name="paper_practice_preview_number">03</string>
+    <string name="paper_practice_preview_copy">选择本轮题数，提前熟悉还没有练过的新题。</string>
+    <string name="paper_practice_enter">进入</string>
+    <string name="paper_practice_question_label">本题</string>
+    <string name="paper_practice_result_explanation">答案解析</string>
+    <string name="paper_practice_preview_label">预习篇</string>
+    <string name="paper_practice_preview_count_title">安排本轮题数</string>
+    <string name="paper_practice_summary_label">本轮小结</string>
+    <string name="paper_practice_wrong_label">错题目录</string>
+    <string name="paper_practice_wrong_count">已载入 %1$d 道待练</string>
+</resources>

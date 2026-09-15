@@ -66,14 +66,17 @@ class ProductImageLoaderTest {
         server.enqueue(MockResponse().setResponseCode(503))
 
         val success = loader.execute(
-            ImageRequest.Builder(context).data(server.url("/images/product.png")).build(),
+            ImageRequest.Builder(context).data(server.url("/images/product.png").toString()).build(),
         )
         val failure = loader.execute(
-            ImageRequest.Builder(context).data(server.url("/images/unavailable.png")).build(),
+            ImageRequest.Builder(context).data(server.url("/images/unavailable.png").toString()).build(),
         )
 
-        assertTrue(success is SuccessResult)
-        assertTrue(failure is ErrorResult)
+        assertTrue(
+            "Expected PNG success; actual=$success; cause=${(success as? ErrorResult)?.throwable?.stackTraceToString()}",
+            success is SuccessResult,
+        )
+        assertTrue("Expected HTTP 503 to produce ErrorResult; actual=$failure", failure is ErrorResult)
     }
 
     private companion object {

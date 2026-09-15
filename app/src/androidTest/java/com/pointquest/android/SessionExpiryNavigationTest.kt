@@ -5,10 +5,12 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.navigation.NavHostController
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.pointquest.android.app.AppRoute
 import com.pointquest.android.core.auth.SessionStatus
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -41,8 +43,15 @@ class SessionExpiryNavigationTest {
 
         val activity = composeRule.activity
         composeRule.runOnUiThread {
+            assertTrue(navController.currentDestination?.hasRoute<AppRoute.Login>() == true)
+            assertNull(navController.previousBackStackEntry)
             activity.onBackPressedDispatcher.onBackPressed()
-            assertTrue(activity.isFinishing)
+            // Root Back may background the task on Android 12+ instead of finishing it.
+            assertTrue(
+                navController.currentDestination == null ||
+                    navController.currentDestination?.hasRoute<AppRoute.Login>() == true,
+            )
+            assertNull(navController.previousBackStackEntry)
         }
         composeRule.onNodeWithText("真实商品详情分支").assertDoesNotExist()
     }

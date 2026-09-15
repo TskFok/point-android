@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -32,6 +32,7 @@ import com.pointquest.android.core.ui.components.AsyncState
 import com.pointquest.android.core.ui.components.PagedListFooter
 import com.pointquest.android.core.ui.components.PagedListFooterState
 import com.pointquest.android.core.ui.components.PointCard
+import com.pointquest.android.core.ui.components.PointPrimaryButton
 import com.pointquest.android.core.ui.components.PointScaffold
 
 @Composable
@@ -78,12 +79,35 @@ fun WrongQuestionsScreen(
             ) { questions ->
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        start = 20.dp,
+                        top = 20.dp,
+                        end = 20.dp,
+                        bottom = 32.dp,
+                    ),
                 ) {
+                    item {
+                        Column(
+                            modifier = Modifier.padding(bottom = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.paper_practice_wrong_label),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = stringResource(R.string.paper_practice_wrong_count, questions.size),
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onBackground,
+                            )
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
                     questions.forEach { wrongQuestion ->
                         item(key = wrongQuestion.question.id) {
                             WrongQuestionRow(wrongQuestion) { onSelectQuestion(wrongQuestion) }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
                     }
                     item {
@@ -121,30 +145,40 @@ private fun WrongQuestionsEmptyState(
     onProfile: () -> Unit,
     modifier: Modifier,
 ) {
-    Box(modifier.padding(16.dp), contentAlignment = Alignment.Center) {
-        PointCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    emptyCopy.titleText(),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    emptyCopy.descriptionText(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    onClick = onFirstPractice,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) { Text(stringResource(R.string.practice_first_action)) }
-                Button(
-                    onClick = onPreview,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) { Text(stringResource(R.string.home_preview_action)) }
-                if (emptyCopy.profileHint) {
+    LazyColumn(
+        modifier = modifier.padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        item {
+            PointCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.paper_practice_wrong_label),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        emptyCopy.titleText(),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        emptyCopy.descriptionText(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    PointPrimaryButton(
+                        text = stringResource(R.string.practice_first_action),
+                        onClick = onFirstPractice,
+                    )
                     TextButton(
-                        onClick = onProfile,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("wrong_empty_profile"),
-                    ) { Text(stringResource(R.string.wrong_questions_empty_profile_action)) }
+                        onClick = onPreview,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text(stringResource(R.string.home_preview_action)) }
+                    if (emptyCopy.profileHint) {
+                        TextButton(
+                            onClick = onProfile,
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("wrong_empty_profile"),
+                        ) { Text(stringResource(R.string.wrong_questions_empty_profile_action)) }
+                    }
                 }
             }
         }
@@ -153,21 +187,29 @@ private fun WrongQuestionsEmptyState(
 
 @Composable
 private fun WrongQuestionRow(question: WrongQuestion, onClick: () -> Unit) {
-    PointCard(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 72.dp)
+            .heightIn(min = 96.dp)
             .clickable(role = Role.Button, onClick = onClick)
-            .testTag("wrong_question_${question.question.id}"),
+            .testTag("wrong_question_${question.question.id}")
+            .padding(vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(question.question.stem, style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.wrong_question_error_count, question.errorCount))
-            Text(
-                stringResource(R.string.wrong_question_retry_action),
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
+        Text(
+            text = question.question.stem,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.wrong_question_error_count, question.errorCount),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            stringResource(R.string.wrong_question_retry_action),
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +33,6 @@ import com.pointquest.android.R
 import com.pointquest.android.core.model.AnswerResult
 import com.pointquest.android.core.model.Question
 import com.pointquest.android.core.model.QuestionOption
-import com.pointquest.android.core.ui.components.PointCard
 
 @Composable
 fun QuestionContent(
@@ -43,12 +43,27 @@ fun QuestionContent(
     onSelectOption: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        PointCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(question.stem, style = MaterialTheme.typography.headlineSmall)
-                Text(stringResource(R.string.question_base_points, question.basePoints))
-            }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.paper_practice_question_label),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = question.stem,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            Text(
+                text = stringResource(R.string.question_base_points, question.basePoints),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
         question.options.sortedBy { it.position }.forEach { option ->
             QuestionOptionCard(
@@ -79,7 +94,7 @@ private fun QuestionOptionCard(
         else -> null
     }
     val statusColors = answerStatus?.let {
-        PracticeStatusColors.option(it, MaterialTheme.colorScheme.background)
+        PracticeStatusColors.option(it, MaterialTheme.colorScheme.surface)
     }
     val stateCopy = stringResource(
         when {
@@ -96,7 +111,7 @@ private fun QuestionOptionCard(
     }
     val background = when {
         statusColors != null -> statusColors.container
-        selected -> MaterialTheme.colorScheme.primary.copy(alpha = .1f)
+        selected -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surface
     }
     Card(
@@ -116,14 +131,20 @@ private fun QuestionOptionCard(
             ),
         colors = CardDefaults.cardColors(containerColor = background),
         border = BorderStroke(if (selected || correct || wrong) 2.dp else 1.dp, accent),
+        shape = MaterialTheme.shapes.medium,
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 option.label,
                 style = MaterialTheme.typography.labelLarge,
-                color = statusColors?.text ?: accent,
+                color = statusColors?.text ?: if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(option.content, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = option.content,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
             when {
                 correct -> OptionStatus(
                     text = stringResource(R.string.option_correct),

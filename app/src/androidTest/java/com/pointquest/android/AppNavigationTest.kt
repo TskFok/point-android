@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertTextContains
@@ -39,7 +40,7 @@ class AppNavigationTest {
         composeRule.onNodeWithTag("login_host").performTextInput("http://new.example.invalid/")
         composeRule.onNodeWithTag("login_username").performTextInput("student")
         composeRule.onNodeWithTag("login_password").performTextInput("Student1234")
-        composeRule.onNodeWithTag("login_submit").performClick()
+        composeRule.onNodeWithTag("login_submit").performScrollTo().performClick()
 
         composeRule.onNodeWithText("请先应用新的服务端地址").assertIsDisplayed()
         composeRule.runOnIdle { assertEquals(0, dependencies.loginCalls) }
@@ -57,10 +58,10 @@ class AppNavigationTest {
 
         composeRule.onNodeWithTag("login_host").performTextClearance()
         composeRule.onNodeWithTag("login_host").performTextInput("http://new.example.invalid/")
-        composeRule.onNodeWithText("还没有账号？注册账号").performClick()
+        composeRule.onNodeWithText("还没有账号？注册账号").performScrollTo().performClick()
 
         composeRule.onNodeWithText("欢迎回来").assertIsDisplayed()
-        composeRule.onNodeWithText("请先应用新的服务端地址").assertIsDisplayed()
+        composeRule.onNodeWithText("请先应用新的服务端地址").performScrollTo().assertIsDisplayed()
         composeRule.runOnIdle { assertEquals(0, dependencies.registerCalls) }
     }
 
@@ -83,7 +84,7 @@ class AppNavigationTest {
         composeRule.onNodeWithTag("register_username").performTextInput("new_student")
         composeRule.onNodeWithTag("register_password").performTextInput("Student1234")
         composeRule.onNodeWithTag("register_confirm_password").performTextInput("Student1234")
-        composeRule.onNodeWithTag("register_submit").performClick()
+        composeRule.onNodeWithTag("register_submit").performScrollTo().performClick()
 
         composeRule.onNodeWithText("创建学生账号").assertIsDisplayed()
         composeRule.runOnIdle { assertEquals(0, dependencies.registerCalls) }
@@ -108,16 +109,16 @@ class AppNavigationTest {
         composeRule.onNodeWithTag("login_host").performTextInput("http://api.example.invalid/")
         composeRule.onNodeWithTag("login_host_apply").performClick()
         composeRule.onNodeWithText("服务端地址已应用").assertIsDisplayed()
-        composeRule.onNodeWithText("还没有账号？注册账号").performClick()
+        composeRule.onNodeWithText("还没有账号？注册账号").performScrollTo().performClick()
         composeRule.onNodeWithText("创建学生账号").assertIsDisplayed()
         composeRule.onNodeWithTag("register_username").performTextInput("new_student")
         composeRule.onNodeWithTag("register_password").performTextInput("Student1234")
         composeRule.onNodeWithTag("register_confirm_password").performTextInput("Student1234")
-        composeRule.onNodeWithTag("register_submit").performClick()
+        composeRule.onNodeWithTag("register_submit").performScrollTo().performClick()
         composeRule.onNodeWithText("注册成功，请登录").assertIsDisplayed()
         composeRule.onNodeWithTag("login_username").assertTextContains("new_student")
         composeRule.onNodeWithTag("login_password").performTextInput("Student1234")
-        composeRule.onNodeWithTag("login_submit").performClick()
+        composeRule.onNodeWithTag("login_submit").performScrollTo().performClick()
         composeRule.onNodeWithText("练习进度").assertIsDisplayed()
 
         composeRule.onNodeWithText("练习").performClick()
@@ -133,7 +134,7 @@ class AppNavigationTest {
         composeRule.onNodeWithTag("product_product-1").performClick()
         composeRule.onNodeWithTag("product_redeem").performClick()
         composeRule.onNodeWithTag("product_redeem_confirm").performClick()
-        composeRule.onNodeWithText("订单详情").assertIsDisplayed()
+        composeRule.onNodeWithText("兑换详情").assertIsDisplayed()
         composeRule.onNodeWithText("订单号：TEST-ORDER-1").assertIsDisplayed()
 
         composeRule.runOnUiThread { navController.navigate(AppRoute.Shop) }

@@ -1,18 +1,22 @@
 package com.pointquest.android.feature.points
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -25,7 +29,6 @@ import com.pointquest.android.core.ui.components.AsyncContent
 import com.pointquest.android.core.ui.components.AsyncState
 import com.pointquest.android.core.ui.components.PagedListFooter
 import com.pointquest.android.core.ui.components.PagedListFooterState
-import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointScaffold
 import com.pointquest.android.feature.orders.localizedTime
 
@@ -38,38 +41,27 @@ fun PointsScreen(
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.points_title), modifier = modifier) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp)) {
-                Text(stringResource(R.string.back))
-            }
-            PointCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.points_current_balance), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        state.balance?.toString() ?: stringResource(R.string.points_balance_unknown),
-                        style = MaterialTheme.typography.headlineMedium,
-                    )
-                    if (state.error != null && state.items.isNotEmpty()) {
-                        Text(state.error.asString(), color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(stringResource(R.string.retry))
-                        }
-                    }
+        val asyncState = when {
+            state.loading && state.items.isEmpty() -> AsyncState.Loading
+            state.error != null && state.items.isEmpty() -> AsyncState.Error(state.error)
+            state.empty -> AsyncState.Empty
+            else -> AsyncState.Content(state.items)
+        }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        ) {
+            item {
+                TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.back))
                 }
             }
-            val asyncState = when {
-                state.loading && state.items.isEmpty() -> AsyncState.Loading
-                state.error != null && state.items.isEmpty() -> AsyncState.Error(state.error)
-                state.empty -> AsyncState.Empty
-                else -> AsyncState.Content(state.items)
+            item {
+                PointsHeader(state, onRetry)
             }
-            AsyncContent(asyncState, onRetry, Modifier.fillMaxSize()) { entries ->
-                LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(entries, key = PointLedgerEntry::id) { entry -> PointLedgerRow(entry) }
+            when (asyncState) {
+                is AsyncState.Content -> {
+                    items(asyncState.value, key = PointLedgerEntry::id) { entry -> PointLedgerRow(entry) }
                     item {
                         when {
                             state.loadingMore -> PagedListFooter(PagedListFooterState.Loading, onLoadMore)
@@ -84,24 +76,114 @@ fun PointsScreen(
                         }
                     }
                 }
+                else -> item {
+                    AsyncContent(
+                        state = asyncState,
+                        onRetry = onRetry,
+                        modifier = if (asyncState == AsyncState.Loading) {
+                            Modifier.fillMaxWidth().fillParentMaxHeight()
+                        } else {
+                            Modifier.fillMaxWidth()
+                        },
+                        emptyContent = { PointsEmptyState(Modifier.fillMaxWidth()) },
+                    ) {}
+                }
             }
         }
     }
 }
 
 @Composable
+private fun PointsHeader(state: PointsUiState, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier.padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            stringResource(R.string.paper_commerce_points_intro),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface)
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                stringResource(R.string.points_current_balance),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                state.balance?.toString() ?: stringResource(R.string.points_balance_unknown),
+                style = MaterialTheme.typography.displaySmall.copy(fontFeatureSettings = "tnum"),
+            )
+        }
+        HorizontalDivider()
+        if (state.error != null && state.items.isNotEmpty()) {
+            Text(state.error.asString(), color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(stringResource(R.string.retry))
+            }
+        }
+        Text(
+            stringResource(R.string.paper_commerce_points_records),
+            style = MaterialTheme.typography.titleLarge,
+        )
+    }
+}
+
+@Composable
+private fun PointsEmptyState(modifier: Modifier) {
+    Box(modifier.padding(20.dp), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            HorizontalDivider()
+            Text(
+                stringResource(R.string.empty_state),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider()
+        }
+    }
+}
+
+@Composable
 internal fun PointLedgerRow(entry: PointLedgerEntry) {
-    PointCard(Modifier.fillMaxWidth().heightIn(min = 88.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(pointTypeText(entry.type), style = MaterialTheme.typography.titleMedium)
+    Column(Modifier.fillMaxWidth().heightIn(min = 88.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 13.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(
+                pointTypeText(entry.type),
+                modifier = Modifier.weight(1f).padding(end = 12.dp),
+                style = MaterialTheme.typography.titleMedium,
+            )
             Text(
                 deltaText(entry.delta),
-                color = if (entry.delta < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.titleLarge,
+                color = when {
+                    entry.delta < 0 -> MaterialTheme.colorScheme.error
+                    entry.delta > 0 -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                style = MaterialTheme.typography.titleLarge.copy(fontFeatureSettings = "tnum"),
             )
-            Text(stringResource(R.string.points_balance_after, entry.balanceAfter))
-            Text(stringResource(R.string.points_created_at, localizedTime(entry.createdAt)))
         }
+        Text(
+            stringResource(R.string.points_balance_after, entry.balanceAfter),
+            modifier = Modifier.padding(top = 4.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            stringResource(R.string.points_created_at, localizedTime(entry.createdAt)),
+            modifier = Modifier.padding(top = 2.dp, bottom = 13.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        HorizontalDivider()
     }
 }
 

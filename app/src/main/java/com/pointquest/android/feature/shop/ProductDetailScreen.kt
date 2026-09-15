@@ -5,15 +5,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,7 +32,6 @@ import com.pointquest.android.R
 import com.pointquest.android.core.ui.asString
 import com.pointquest.android.core.ui.components.AsyncContent
 import com.pointquest.android.core.ui.components.AsyncState
-import com.pointquest.android.core.ui.components.PointCard
 import com.pointquest.android.core.ui.components.PointPrimaryButton
 import com.pointquest.android.core.ui.components.PointScaffold
 import com.pointquest.android.data.products.ProductImageUrlFactory
@@ -73,28 +76,59 @@ fun ProductDetailScreen(
                         onClick = onBack,
                         modifier = Modifier.heightIn(min = 48.dp).testTag("product_back"),
                     ) { Text(stringResource(R.string.back)) }
-                    ProductImage(
-                        product,
-                        imageUrlFactory,
-                        Modifier.size(180.dp).align(Alignment.CenterHorizontally),
-                    )
-                    Text(product.name, style = MaterialTheme.typography.headlineSmall)
-                    Text(product.description, style = MaterialTheme.typography.bodyLarge)
-                    PointCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(stringResource(R.string.product_points_cost, product.pointsCost))
-                            Text(stringResource(R.string.product_stock, product.stock.coerceAtLeast(0)))
-                            Text(
-                                state.balance?.let { stringResource(R.string.product_balance, it) }
-                                    ?: stringResource(R.string.product_balance_unknown),
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().height(210.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            ProductImage(
+                                product,
+                                imageUrlFactory,
+                                Modifier.size(180.dp),
                             )
-                            if (state.error != null) {
-                                Text(state.error.asString(), color = MaterialTheme.colorScheme.error)
-                                TextButton(
-                                    onClick = onRetry,
-                                    modifier = Modifier.heightIn(min = 48.dp),
-                                ) { Text(stringResource(R.string.retry)) }
-                            }
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(product.name, style = MaterialTheme.typography.headlineSmall)
+                        Text(
+                            product.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Text(
+                                stringResource(R.string.paper_commerce_exchange_summary),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                stringResource(R.string.product_points_cost, product.pointsCost),
+                                style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"),
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Column {
+                        ProductDetailLine(stringResource(R.string.product_stock, product.stock.coerceAtLeast(0)))
+                        ProductDetailLine(
+                            state.balance?.let { stringResource(R.string.product_balance, it) }
+                                ?: stringResource(R.string.product_balance_unknown),
+                        )
+                    }
+                    if (state.error != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(state.error.asString(), color = MaterialTheme.colorScheme.error)
+                            TextButton(
+                                onClick = onRetry,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) { Text(stringResource(R.string.retry)) }
                         }
                     }
                     state.pointsDeficit?.let { deficit ->
@@ -160,4 +194,14 @@ fun ProductDetailScreen(
             },
         )
     }
+}
+
+@Composable
+private fun ProductDetailLine(text: String) {
+    HorizontalDivider()
+    Text(
+        text = text,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+        style = MaterialTheme.typography.bodyLarge,
+    )
 }

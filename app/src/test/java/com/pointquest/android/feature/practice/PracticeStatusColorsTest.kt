@@ -1,8 +1,8 @@
 package com.pointquest.android.feature.practice
 
 import androidx.compose.ui.graphics.Color
-import com.pointquest.android.core.ui.theme.ClassroomBackground
-import com.pointquest.android.core.ui.theme.ClassroomSurface
+import com.pointquest.android.core.ui.theme.PaperBackground
+import com.pointquest.android.core.ui.theme.PaperSurface
 import com.pointquest.android.core.ui.theme.ErrorRed
 import com.pointquest.android.core.ui.theme.ErrorText
 import com.pointquest.android.core.ui.theme.SuccessGreen
@@ -20,11 +20,11 @@ class PracticeStatusColorsTest {
         val palettes = listOf(
             PracticeAnswerStatus.Correct to PracticeStatusColors.result(
                 PracticeAnswerStatus.Correct,
-                ClassroomSurface,
+                PaperSurface,
             ),
             PracticeAnswerStatus.Incorrect to PracticeStatusColors.result(
                 PracticeAnswerStatus.Incorrect,
-                ClassroomSurface,
+                PaperSurface,
             ),
         )
 
@@ -40,11 +40,11 @@ class PracticeStatusColorsTest {
         val palettes = listOf(
             PracticeAnswerStatus.Correct to PracticeStatusColors.option(
                 PracticeAnswerStatus.Correct,
-                ClassroomBackground,
+                PaperBackground,
             ),
             PracticeAnswerStatus.Incorrect to PracticeStatusColors.option(
                 PracticeAnswerStatus.Incorrect,
-                ClassroomBackground,
+                PaperBackground,
             ),
         )
 

@@ -2,8 +2,10 @@ package com.pointquest.android.feature.orders
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -11,8 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,7 +33,7 @@ import com.pointquest.android.core.ui.components.AsyncContent
 import com.pointquest.android.core.ui.components.AsyncState
 import com.pointquest.android.core.ui.components.PagedListFooter
 import com.pointquest.android.core.ui.components.PagedListFooterState
-import com.pointquest.android.core.ui.components.PointCard
+import com.pointquest.android.core.ui.components.PointPrimaryButton
 import com.pointquest.android.core.ui.components.PointScaffold
 import com.pointquest.android.data.products.ProductImageUrlFactory
 import com.pointquest.android.feature.shop.ProductImage
@@ -51,29 +55,36 @@ fun OrderListScreen(
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.orders_title), modifier = modifier) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp)) {
-                Text(stringResource(R.string.back))
+        val asyncState = when {
+            state.loading && state.items.isEmpty() -> AsyncState.Loading
+            state.error != null && state.items.isEmpty() -> AsyncState.Error(state.error)
+            state.empty -> AsyncState.Empty
+            else -> AsyncState.Content(state.items)
+        }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
+        ) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.back))
+                    }
+                    Text(
+                        text = stringResource(R.string.paper_commerce_orders_intro),
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            val asyncState = when {
-                state.loading && state.items.isEmpty() -> AsyncState.Loading
-                state.error != null && state.items.isEmpty() -> AsyncState.Error(state.error)
-                state.empty -> AsyncState.Empty
-                else -> AsyncState.Content(state.items)
-            }
-            AsyncContent(
-                state = asyncState,
-                onRetry = onRetry,
-                modifier = Modifier.fillMaxSize(),
-                emptyContent = { OrdersEmptyState(onShop, Modifier.fillMaxSize()) },
-            ) { orders ->
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(orders, key = Order::id) { order ->
-                        OrderRow(order, imageUrlFactory) { onOrderClick(order) }
+            when (asyncState) {
+                is AsyncState.Content -> {
+                    items(asyncState.value, key = Order::id) { order ->
+                        Column {
+                            OrderRow(order, imageUrlFactory) { onOrderClick(order) }
+                            HorizontalDivider()
+                        }
                     }
                     item {
                         when {
@@ -89,6 +100,18 @@ fun OrderListScreen(
                         }
                     }
                 }
+                else -> item {
+                    AsyncContent(
+                        state = asyncState,
+                        onRetry = onRetry,
+                        modifier = if (asyncState == AsyncState.Loading) {
+                            Modifier.fillMaxWidth().fillParentMaxHeight()
+                        } else {
+                            Modifier.fillMaxWidth()
+                        },
+                        emptyContent = { OrdersEmptyState(onShop, Modifier.fillMaxWidth()) },
+                    ) {}
+                }
             }
         }
     }
@@ -97,26 +120,23 @@ fun OrderListScreen(
 @Composable
 private fun OrdersEmptyState(onShop: () -> Unit, modifier: Modifier) {
     Column(
-        modifier = modifier.padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.padding(vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        PointCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    stringResource(R.string.orders_empty_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    stringResource(R.string.orders_empty_copy),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    onClick = onShop,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) { Text(stringResource(R.string.orders_empty_shop_action)) }
-            }
-        }
+        HorizontalDivider()
+        Text(
+            stringResource(R.string.orders_empty_title),
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Text(
+            stringResource(R.string.orders_empty_copy),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        PointPrimaryButton(
+            text = stringResource(R.string.orders_empty_shop_action),
+            onClick = onShop,
+        )
+        HorizontalDivider()
     }
 }
 
@@ -126,23 +146,80 @@ private fun OrderRow(
     imageUrlFactory: ProductImageUrlFactory,
     onClick: () -> Unit,
 ) {
-    PointCard(
-        Modifier.fillMaxWidth().heightIn(min = 96.dp)
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 116.dp)
             .clickable(role = Role.Button, onClick = onClick)
-            .testTag("order_${order.id}"),
+            .testTag("order_${order.id}")
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ProductImage(
-                order.productNameSnapshot,
-                order.productImageKeySnapshot,
-                imageUrlFactory,
-                Modifier.size(72.dp).align(Alignment.CenterHorizontally),
-            )
-            Text(order.productNameSnapshot, style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.order_number, order.orderNo))
-            Text(orderStatusText(order.status))
-            Text(stringResource(R.string.order_created_at, localizedTime(order.createdAt)))
+        Surface(
+            modifier = Modifier.size(width = 72.dp, height = 88.dp),
+            shape = RoundedCornerShape(5.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                ProductImage(
+                    order.productNameSnapshot,
+                    order.productImageKeySnapshot,
+                    imageUrlFactory,
+                    Modifier.fillMaxSize().padding(10.dp),
+                )
+            }
         }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Text(
+                order.productNameSnapshot,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            OrderStatusLabel(order.status)
+            Text(
+                stringResource(R.string.order_points_snapshot, order.pointsCostSnapshot),
+                style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                stringResource(R.string.order_number, order.orderNo),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                stringResource(R.string.order_created_at, localizedTime(order.createdAt)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+internal fun OrderStatusLabel(status: OrderStatus) {
+    val containerColor = when (status) {
+        OrderStatus.PENDING_PICKUP -> MaterialTheme.colorScheme.secondaryContainer
+        OrderStatus.COMPLETED -> MaterialTheme.colorScheme.tertiaryContainer
+        OrderStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer
+        OrderStatus.UNKNOWN -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val contentColor = when (status) {
+        OrderStatus.PENDING_PICKUP -> MaterialTheme.colorScheme.onSecondaryContainer
+        OrderStatus.COMPLETED -> MaterialTheme.colorScheme.onTertiaryContainer
+        OrderStatus.CANCELLED -> MaterialTheme.colorScheme.onErrorContainer
+        OrderStatus.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Text(
+            text = orderStatusText(status),
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelMedium,
+        )
     }
 }
 

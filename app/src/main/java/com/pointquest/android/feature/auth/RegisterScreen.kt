@@ -2,6 +2,7 @@ package com.pointquest.android.feature.auth
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
@@ -35,10 +36,15 @@ fun RegisterScreen(
     modifier: Modifier = Modifier,
 ) {
     PointScaffold(title = stringResource(R.string.register_title), modifier = modifier) { padding ->
-        AuthFormContainer(padding) {
+        AuthFormContainer(padding, rememberScrollState()) {
             Text(
                 text = stringResource(R.string.register_welcome),
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineLarge,
+            )
+            Text(
+                text = stringResource(R.string.paper_register_intro),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             state.message?.let { message ->
                 Text(
@@ -50,57 +56,59 @@ fun RegisterScreen(
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
-            AuthTextField(
-                value = state.username,
-                onValueChange = onUsernameChange,
-                label = stringResource(R.string.auth_username),
-                error = state.usernameError?.asString(),
-                enabled = !state.submitting,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                modifier = Modifier.testTag("register_username"),
-            )
-            AuthTextField(
-                value = state.password,
-                onValueChange = onPasswordChange,
-                label = stringResource(R.string.auth_password),
-                error = state.passwordError?.asString(),
-                enabled = !state.submitting,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Next,
-                ),
-                password = true,
-                modifier = Modifier.testTag("register_password"),
-            )
-            AuthTextField(
-                value = state.confirmPassword,
-                onValueChange = onConfirmPasswordChange,
-                label = stringResource(R.string.auth_confirm_password),
-                error = state.confirmPasswordError?.asString(),
-                enabled = !state.submitting,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(onDone = { onRegister() }),
-                password = true,
-                modifier = Modifier.testTag("register_confirm_password"),
-            )
-            Text(
-                text = stringResource(R.string.auth_password_helper),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            PointPrimaryButton(
-                text = if (state.submitting) {
-                    stringResource(R.string.auth_submitting)
-                } else {
-                    stringResource(R.string.auth_register_action)
-                },
-                onClick = onRegister,
-                enabled = !state.submitting,
-                modifier = Modifier.testTag("register_submit"),
-            )
+            AuthSection(title = stringResource(R.string.paper_auth_register_section)) {
+                AuthTextField(
+                    value = state.username,
+                    onValueChange = onUsernameChange,
+                    label = stringResource(R.string.auth_username),
+                    error = state.usernameError?.asString(),
+                    enabled = !state.submitting,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    modifier = Modifier.testTag("register_username"),
+                )
+                AuthTextField(
+                    value = state.password,
+                    onValueChange = onPasswordChange,
+                    label = stringResource(R.string.auth_password),
+                    error = state.passwordError?.asString(),
+                    enabled = !state.submitting,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Next,
+                    ),
+                    password = true,
+                    modifier = Modifier.testTag("register_password"),
+                )
+                AuthTextField(
+                    value = state.confirmPassword,
+                    onValueChange = onConfirmPasswordChange,
+                    label = stringResource(R.string.auth_confirm_password),
+                    error = state.confirmPasswordError?.asString(),
+                    enabled = !state.submitting,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { onRegister() }),
+                    password = true,
+                    modifier = Modifier.testTag("register_confirm_password"),
+                )
+                Text(
+                    text = stringResource(R.string.auth_password_helper),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PointPrimaryButton(
+                    text = if (state.submitting) {
+                        stringResource(R.string.auth_submitting)
+                    } else {
+                        stringResource(R.string.auth_register_action)
+                    },
+                    onClick = onRegister,
+                    enabled = !state.submitting,
+                    modifier = Modifier.testTag("register_submit"),
+                )
+            }
             TextButton(
                 onClick = onBackToLogin,
                 enabled = !state.submitting,

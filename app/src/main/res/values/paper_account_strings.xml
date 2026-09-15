@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="paper_home_journal">学习手记</string>
+    <string name="paper_home_headline_lead">把好奇心，</string>
+    <string name="paper_home_headline_emphasis">变成每一点进步。</string>
+    <string name="paper_home_progress_total">/%1$d</string>
+    <string name="paper_home_progress_percent">已完成 %1$d%% · 首次作答</string>
+    <string name="paper_home_unanswered">等待探索的新题</string>
+    <string name="paper_home_pending_wrong">需要重练的错题</string>
+    <string name="paper_home_mastered_wrong">已经掌握的错题</string>
+    <string name="paper_home_question_unit">题</string>
+    <string name="paper_home_points_unit">积分</string>
+
+    <string name="paper_profile_account">学习账户</string>
+    <string name="paper_profile_settings">学习设置</string>
+    <string name="paper_profile_records">我的记录</string>
+
+    <string name="paper_login_intro">回到你的学习手记，继续今天的练习。</string>
+    <string name="paper_register_intro">从一个新账号开始记录每一点进步。</string>
+    <string name="paper_auth_server_section">服务连接</string>
+    <string name="paper_auth_login_section">账号登录</string>
+    <string name="paper_auth_register_section">账号信息</string>
+</resources>

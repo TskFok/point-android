@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,7 +69,10 @@ fun QuestionScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     item {
-                        QuestionProgress(state, onPrevious, onNext)
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            QuestionProgress(state)
+                            QuestionNavigation(state, onPrevious, onNext)
+                        }
                     }
                     item {
                         QuestionContent(
@@ -137,15 +142,6 @@ fun QuestionScreen(
                 state.tailError?.let { message ->
                     item { TailLoadError(message.asString(), onRetryTailLoad) }
                 }
-                if (state.completed && state.mode == PracticeMode.FIRST) {
-                    item {
-                        Text(
-                            practiceEmptyCopy(state.language).descriptionText(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
                 }
             }
             state.question == null && state.error != null -> QuestionError(state, onRetry, Modifier.padding(padding))
@@ -157,37 +153,45 @@ fun QuestionScreen(
 @Composable
 private fun QuestionProgress(
     state: QuestionUiState,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            text = stringResource(R.string.preview_progress, state.currentIndex + 1, state.queue.size),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+@Composable
+private fun QuestionNavigation(
+    state: QuestionUiState,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "第 ${state.currentIndex + 1} / ${state.queue.size} 题",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedButton(
+            onClick = onPrevious,
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("question_previous"),
+            enabled = state.hasPrevious && !state.submitting && !state.loadingNext,
+            shape = MaterialTheme.shapes.small,
         ) {
-            TextButton(
-                onClick = onPrevious,
-                modifier = Modifier.heightIn(min = 48.dp).testTag("question_previous"),
-                enabled = state.hasPrevious && !state.submitting && !state.loadingNext,
-            ) {
-                Text(stringResource(R.string.preview_previous))
-            }
-            PointPrimaryButton(
-                text = stringResource(R.string.answer_next),
-                onClick = onNext,
-                modifier = Modifier.weight(1f).testTag("question_next"),
-                enabled = !state.submitting &&
-                    !state.loadingNext &&
-                    !state.completed &&
-                    (state.hasNextInQueue || state.mode == PracticeMode.FIRST),
-            )
+            Text(stringResource(R.string.preview_previous))
         }
+        PointPrimaryButton(
+            text = stringResource(R.string.answer_next),
+            onClick = onNext,
+            modifier = Modifier.weight(1f).testTag("question_next"),
+            enabled = !state.submitting &&
+                !state.loadingNext &&
+                !state.completed &&
+                (state.hasNextInQueue || state.mode == PracticeMode.FIRST),
+        )
     }
 }
 
@@ -218,28 +222,33 @@ private fun PracticeCompleted(
     onProfile: () -> Unit,
     modifier: Modifier,
 ) {
-    Column(
+    LazyColumn(
         modifier = modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PointCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(emptyCopy.titleText(), style = MaterialTheme.typography.headlineSmall)
-                Text(emptyCopy.descriptionText())
-                PointPrimaryButton(stringResource(R.string.practice_completed_action), onPractice)
-                TextButton(onClick = onWrongQuestions, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
-                    Text(stringResource(R.string.home_wrong_questions))
-                }
-                TextButton(onClick = onPreview, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
-                    Text(stringResource(R.string.home_preview_action))
-                }
-                if (emptyCopy.profileHint) {
-                    TextButton(
-                        onClick = onProfile,
-                        modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth().testTag("practice_completed_profile"),
-                    ) {
-                        Text(stringResource(R.string.practice_completed_profile_action))
+        item {
+            PointCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(emptyCopy.titleText(), style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        emptyCopy.descriptionText(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    PointPrimaryButton(stringResource(R.string.practice_completed_action), onPractice)
+                    TextButton(onClick = onWrongQuestions, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
+                        Text(stringResource(R.string.home_wrong_questions))
+                    }
+                    TextButton(onClick = onPreview, modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth()) {
+                        Text(stringResource(R.string.home_preview_action))
+                    }
+                    if (emptyCopy.profileHint) {
+                        TextButton(
+                            onClick = onProfile,
+                            modifier = Modifier.heightIn(min = 48.dp).fillMaxWidth().testTag("practice_completed_profile"),
+                        ) {
+                            Text(stringResource(R.string.practice_completed_profile_action))
+                        }
                     }
                 }
             }
@@ -249,15 +258,17 @@ private fun PracticeCompleted(
 
 @Composable
 private fun QuestionError(state: QuestionUiState, onRetry: () -> Unit, modifier: Modifier) {
-    Column(
+    LazyColumn(
         modifier = modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        PointCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(state.error?.asString() ?: stringResource(R.string.load_failed))
-                TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(stringResource(R.string.retry))
+        item {
+            PointCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(state.error?.asString() ?: stringResource(R.string.load_failed))
+                    TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(stringResource(R.string.retry))
+                    }
                 }
             }
         }
